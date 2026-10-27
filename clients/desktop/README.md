@@ -41,6 +41,16 @@ Test wrapper generation without accessing live data:
 python3 clients/desktop/macos/Tests/test_attach_launcher.py
 ```
 
+For a runtime checkout with compatible web code that needs the replay fix in this branch, create a separate plugin copy, then pass that output as `--plugins`:
+
+```sh
+python3 clients/desktop/macos/prepare-web-overlay.py \
+  --plugins /path/to/existing-checkout/plugins \
+  --output /path/to/new-desktop-plugins
+```
+
+This copies the selected plugins and replaces only `exo-command`'s `server.py` and `service.py`. It leaves the running core and original runtime files untouched. Use it only when those two original files match this branch's base version. Fresh page event streams use the recent event cache; saved transcripts still come from the core. Replay waits for the browser to consume each event so a large history cannot fill the web process's output buffer and freeze the app.
+
 ## Generic shell build
 
 ```sh
