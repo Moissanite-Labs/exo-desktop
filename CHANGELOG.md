@@ -5,6 +5,10 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 
 ## [Unreleased]
 
+### Added
+
+- Principal-only `/permissions full <session-id>` authorizes all tool calls in one selected session, including background turns, with a required redacted audit before each allow. Other sessions remain gated unless the principal explicitly selects `full all`. Ask revokes full (#623).
+
 ### Fixed
 
 - Context: `_carry_pins` reads the parent's pins fresh from disk, so a pin the parent undid does not resurrect in a child bound from it (#645).
