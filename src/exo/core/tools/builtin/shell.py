@@ -281,8 +281,16 @@ def run_command(command: str, cwd: str, timeout: float = DEFAULT_TIMEOUT, cap: i
         out.add("\n" + note)
     rendered = out.render()
     if github_auth:
+        # Redact only the token values this binding injected, and only when a
+        # binding exists, as jobs do with auth_secrets. Redacting every known
+        # value here left markers a later pass matched across, mangling the
+        # result; an unbound seat gets no pass here, as on main.
+        from exo.core.github_auth import binding
         from exo.core.models.keys import redact_secrets
-        rendered = redact_secrets(rendered)
+        secrets = [env[name] for name in ("GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_TOKEN", "GITHUB_ENTERPRISE_TOKEN")
+                   if env.get(name)] if binding(*github_auth) else []
+        if secrets:
+            rendered = redact_secrets(rendered, secrets)
     return code, rendered, status
 
 
