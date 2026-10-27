@@ -38,11 +38,11 @@ Run this from `clients/desktop`:
 macos/build-macos-app.sh
 ```
 
-This needs `swiftc` and a Mac. It builds `build/ExoDesktop.app`. It signs the app ad hoc only. A signed and notarized release is separate work.
+This needs `swiftc` and a Mac. It builds `macos/build/ExoDesktop.app`. It signs the app ad hoc only. A signed and notarized release is separate work.
 
 ## Run
 
-Open `build/ExoDesktop.app`. `exo` must be installed and on PATH first. Run `exo web` in a terminal if the app reports a startup failure. That terminal output is the diagnostic.
+Open `macos/build/ExoDesktop.app`. `exo` must be installed and on PATH first. Run `exo web` in a terminal if the app reports a startup failure. That terminal output is the diagnostic.
 
 ## Still to do
 
