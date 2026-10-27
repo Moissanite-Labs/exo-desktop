@@ -142,7 +142,7 @@ class ReplayCache:
             return True
 
 
-def verify_request(headers, method: str, path: str, pubkey_for, replay: ReplayCache) -> str:
+def verify_request(headers, method: str, path: str, pubkey_for, replay: ReplayCache, query: str = "") -> str:
     """Return the authenticated seat or raise ValueError with a short reason.
 
     `headers` is any case-insensitive mapping (or a dict with lower-case keys);
@@ -157,7 +157,7 @@ def verify_request(headers, method: str, path: str, pubkey_for, replay: ReplayCa
     if not ts_within(ts, REPLAY_MINUTES):
         raise ValueError("request timestamp outside the 5-minute window")
     try:
-        verify_key(pub).verify(request_message(method, path, ts), unb64(sig))
+        verify_key(pub).verify(request_message(method, path, ts, query), unb64(sig))
     except (BadSignatureError, ValueError):
         raise ValueError("bad request signature") from None
     if not replay.first_use(seat, ts, sig):
