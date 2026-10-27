@@ -7,6 +7,10 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 
 ### Fixed
 
+- The Command view reopens its event stream after the browser closes it for good, instead of leaving the last
+  snapshot on screen (#60). The first reopen waits 1 second, repeated drops back off up to 15 seconds, and
+  closing the view stops retries. Where the browser cannot open a stream, the view re-reads the snapshot
+  every 5 seconds.
 - Context: `_carry_pins` reads the parent's pins fresh from disk, so a pin the parent undid does not resurrect in a child bound from it (#645).
 - A `$((` bash reads as a command substitution is read as one now (#553). bash closes the `$( ` at the first `)`
   outside quotes, backquotes, `$( )` bodies and comments, and reads the span as arithmetic only when the text
