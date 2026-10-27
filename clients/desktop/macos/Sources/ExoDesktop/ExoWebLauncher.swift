@@ -9,6 +9,7 @@ import Darwin
 final class ExoWebLauncher: @unchecked Sendable {
     enum LaunchError: Error, CustomStringConvertible {
         case exoNotFound
+        case bundledRuntimeDamaged
         case invalidOverride(String)
         case launchFailed
         case timedOut
@@ -18,6 +19,8 @@ final class ExoWebLauncher: @unchecked Sendable {
             switch self {
             case .exoNotFound:
                 return "No `exo` binary was found on PATH. Install Exo first, or set EXO_DESKTOP_EXO."
+            case .bundledRuntimeDamaged:
+                return "The bundled desktop runtime is missing or damaged. Reinstall the app; it does not use the source checkout."
             case .invalidOverride(let path):
                 return "EXO_DESKTOP_EXO points to \(path), which is not executable."
             case .launchFailed:
@@ -26,7 +29,7 @@ final class ExoWebLauncher: @unchecked Sendable {
                 return "`exo web` did not print a page address within 30 seconds."
             case .exited(let code):
                 if code == 69 { return "The selected core socket is unavailable. Start that core separately, then retry. The desktop will not start a replacement core." }
-                if code == 72 { return "The selected desktop runtime is unavailable. Reinstall the app with a working runtime." }
+                if code == 72 { return "The bundled desktop runtime is missing, damaged, or version-mismatched. Reinstall the app; it does not fall back to the source checkout." }
                 if code == 1 {
                     return "`exo web` exited. Its port may already be in use. Use the page that is already open, or set EXO_DESKTOP_PORT to a free port."
                 }
@@ -55,6 +58,17 @@ final class ExoWebLauncher: @unchecked Sendable {
     private let lock = NSLock()
 
     func start(completion: @escaping (Result<URL, LaunchError>) -> Void) {
+        // A bundled launcher that exists but is not executable is damaged,
+        // not absent. Falling through to a PATH `exo` here would silently
+        // run whatever checkout venv happens to be installed, which is
+        // exactly the failure this packaging work removes.
+        if (ProcessInfo.processInfo.environment["EXO_DESKTOP_EXO"] ?? "").isEmpty,
+           let bundled = Bundle.main.resourceURL?.appendingPathComponent("exo-alpha"),
+           FileManager.default.fileExists(atPath: bundled.path),
+           !FileManager.default.isExecutableFile(atPath: bundled.path) {
+            completion(.failure(.bundledRuntimeDamaged))
+            return
+        }
         if let override = ProcessInfo.processInfo.environment["EXO_DESKTOP_EXO"],
            !override.isEmpty,
            !FileManager.default.isExecutableFile(atPath: override) {
