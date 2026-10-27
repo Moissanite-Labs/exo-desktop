@@ -13,6 +13,7 @@ from typing import Any
 from exo.core.tools.builtin.fuzzy import format_no_match_hint, fuzzy_find_and_replace
 from exo.core.tools.builtin.patch import MAX_READ_BYTES, apply_patch, read_regular, write_atomic
 from exo.core.tools.registry import Registry, ToolContext, ToolError
+from exo.gate import StoreSkip
 
 DEFAULT_LIMIT = 2000
 MAX_LINE_CHARS = 2000
@@ -20,7 +21,20 @@ MAX_LINE_CHARS = 2000
 
 def _read_existing(ctx: ToolContext, path: str) -> str:
     p = ctx.resolve(path)
-    if not p.exists():
+    # A symlink that escapes the working directory (e.g. a planted link into
+    # ~/.ssh) must not be followed and read. Symlinks that stay inside cwd are
+    # still followed (existing behaviour), but a secret-store target is refused
+    # below. grep/code_find already guard secret stores; read_file must too, so a
+    # secret never reaches the transcript.
+    real = p.resolve()
+    if p.is_symlink() and real != p:
+        try:
+            real.relative_to(Path(ctx.cwd).resolve())
+        except ValueError:
+            raise ToolError(f"{path} is a symlink that escapes the working directory; not following it")
+    if StoreSkip(str(ctx.cwd), path)(str(real)):
+        raise ToolError(f"{path} is in a secret store; not reading it")
+    if not real.exists():
         raise ToolError(f"File not found: {path}")
     if p.is_dir():
         raise ToolError(f"{path} is a directory; use glob to list it")

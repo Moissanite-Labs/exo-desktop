@@ -217,3 +217,27 @@ def test_grep_skips_fifos_devices_and_big_files(run, tmp_path):
         os.symlink(DEVICE, tmp_path / "n_dev.md")
     res = _bounded(lambda: run("grep", pattern="needle"), [tmp_path / "m_pipe"])
     assert res.text() == "a.txt:1:needle"
+
+
+@needs_links
+def test_read_refuses_a_symlink_that_escapes(run, tmp_path, tmp_path_factory):
+    # A planted link out of the project (into a secret elsewhere) must not be
+    # followed and read. Intra-project links are still followed (see above).
+    outside = tmp_path_factory.mktemp("outside") / "secret.txt"
+    outside.write_text("topsecret\n")
+    link = tmp_path / "link.txt"
+    link.symlink_to(outside)
+    res = run("read_file", path="link.txt")
+    assert res.is_error and "escapes" in res.text()
+    # A link that stays inside cwd is still followed.
+    (tmp_path / "a.txt").write_text("hello\n")
+    (tmp_path / "b.txt").symlink_to("a.txt")
+    assert not run("read_file", path="b.txt").is_error
+
+
+def test_read_refuses_a_secret_store_path(run, tmp_path):
+    # Directly naming a secret-store file (here inside a .ssh-shaped name) is
+    # refused, so a secret never reaches the transcript. grep/code_find already
+    # guard this; read_file must too (issue 8).
+    res = run("read_file", path=".ssh/id_rsa")
+    assert res.is_error and "secret store" in res.text()
