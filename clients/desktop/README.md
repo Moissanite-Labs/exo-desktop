@@ -70,6 +70,12 @@ open clients/desktop/macos/build/ExoDesktop.app
 
 This shell uses external `exo`. `EXO_DESKTOP_EXO` overrides discovery; otherwise a bundled launcher is preferred, then PATH and standard local install locations. `EXO_DESKTOP_PORT` overrides the default port 7342. The generic shell starts in the user's home directory and preserves the usual Exo data configuration. Environment overrides must be passed when starting the executable directly, or through `open --env` on macOS versions supporting it.
 
+## Native controls
+
+The app menu has About Exo, showing the app version, build and the source commit stamped at build time (`ExoSourceCommit` in Info.plist, `unknown` outside a git checkout). The View menu has Zoom In (Command-+), Zoom Out (Command--) and Actual Size (Command-0), applied to the web view. The Edit menu has a Find submenu: Find… (Command-F) opens a native find bar, Find Next (Command-G), Find Previous (Shift-Command-G), Use Selection for Find (Command-E); Enter finds next, Escape closes the bar. The Window menu has Minimize, Zoom Window and Close. The status bar at the bottom of the window shows Starting, Connecting, Ready or Failed; Ready appears only after the page finishes loading, and Connecting first verifies the printed origin actually answers HTTP (a token-free request for the page shell, fragment stripped) — a printed URL alone is never shown as healthy. Startup failure keeps the existing Retry/Quit alert.
+
+The app icon is `Exo` in Info.plist. The source artwork is `macos/Assets/ExoIcon-1024.png`, regenerated with `python3 macos/make-icon-source.py` (standard library only, so it runs on Linux too); the build script converts it to `Exo.icns` with `sips` + `iconutil` on macOS (`macos/make-icon.sh` also runs standalone) and warns instead of failing when those tools are absent.
+
 ## Lifecycle and security
 
 The shell waits for a complete local page URL line, keeps its fragment token in memory, and continuously drains both process pipes without displaying their contents. Startup completion fires once; a later server exit presents Retry/Quit. Reload Page restarts the web server. Closing the window quits the app and stops its web server with bounded SIGINT, SIGTERM and SIGKILL stages (about four seconds maximum); the background core remains running. Stop Core first stops the web server, then stops the core so the web feed cannot restart it. Reload Page starts again.
