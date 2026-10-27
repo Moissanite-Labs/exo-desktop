@@ -57,6 +57,8 @@ This copies the selected plugins and replaces only `exo-command`'s `server.py` a
 
 Add `--with-model-picker` to also install the searchable chat and Providers pickers. This option checks the supported asset versions and patches chat without replacing runtime-specific commands. Names, providers and full routes can be searched, including punctuation-free queries such as `gpt6`. Use the arrow keys and Enter to select, or Escape to cancel. Typing alone does not change the model.
 
+Add `--with-approval-shortcuts` to show the approval keyboard path and highlight the focused card. Press Ctrl+F to focus the first approval, then use its shown keys. Always and deny require Enter. This option checks the original approval script and stylesheet before copying the updated assets. It can be combined with `--with-model-picker`.
+
 For separate agent GitHub credentials, see [per-seat GitHub authentication](../../docs/GITHUB-AUTH.md). It needs a core version containing that feature. Updating this web overlay alone does not enable it in an older core.
 
 ## Generic shell build
