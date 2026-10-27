@@ -1,5 +1,5 @@
 diff --git a/plugins/exo-command/exo_command/static/chat.js b/plugins/exo-command/exo_command/static/chat.js
-index 7643abc1..76089b8d 100644
+index 7643abc1..2aaee996 100644
 --- a/plugins/exo-command/exo_command/static/chat.js
 +++ b/plugins/exo-command/exo_command/static/chat.js
 @@ -2,6 +2,7 @@
@@ -27,7 +27,7 @@ index 7643abc1..76089b8d 100644
      closePicker();
      await refreshSessions();
      flash((defaults ? "Default model: " : "Main model: ") + ref);
-@@ -544,26 +546,23 @@ export function mount(root) {
+@@ -544,26 +546,25 @@ export function mount(root) {
      if (!defaults && !sid) { flash("open a thread first for /model; /default sets the model for new threads"); return; }
      try {
        if (args) { await chooseModel(args, defaults, sid); return true; }
@@ -50,7 +50,9 @@ index 7643abc1..76089b8d 100644
 -        h("p", null, "Changes the shared main route; existing fallbacks remain."), apply,
 -        h("button", { class: "xc-btn", onclick: closePicker }, "Cancel"));
 +      const picker = createModelPicker({ label: defaults ? "Default model for new threads" : "Main model", selected: model,
-+        applyLabel: defaults ? "Set default" : "Use model", note: "Search names or providers. Existing fallbacks remain.",
++        applyLabel: defaults ? "Set default" : "Use model",
++        note: defaults ? "Saves the default for new threads and changes the shared core’s main route. Existing fallbacks remain."
++          : "Changes the shared core’s main route. Existing fallbacks remain.",
 +        onCancel: closePicker, onApply: async ref => {
 +          if (sid !== current || generation !== pickerGeneration || changingModel) return;
 +          await chooseModel(ref, defaults, sid, generation);
@@ -70,7 +72,7 @@ index 7643abc1..76089b8d 100644
        return true;
      } catch (e) { if (args || generation === pickerGeneration) fail(e); return false; }   // a newer picker owns the strip
    }
-@@ -711,7 +710,7 @@ export function mount(root) {
+@@ -711,7 +712,7 @@ export function mount(root) {
    const offState = bus.onState((st) => {
      if (st.synced !== synced) { synced = st.synced; recover(); }
    });

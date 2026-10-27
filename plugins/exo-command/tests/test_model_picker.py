@@ -131,6 +131,8 @@ def test_chat_search_preserves_thread_and_default_routes_and_returns_focus(page,
     page.wait('document.querySelectorAll(".xc-sess").length === 2')
     command(page, text)
     page.wait('!!document.querySelector("[role=combobox]")')
+    assert page.eval('document.querySelector(".xc-model-note").textContent.includes("shared core’s main route")')
+    assert page.eval('document.querySelector(".xc-model-note").textContent.includes("default for new threads")') == (text == '/default')
     search(page, 'beta sonnet')
     assert page.eval('posts.filter(p=>p.path.endsWith("/model")||p.path.endsWith("/default")).length') == 0
     key(page, 'Enter')
