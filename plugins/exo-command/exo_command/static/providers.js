@@ -6,6 +6,8 @@ import { h, api, errorBox, pageHead, readout, pill, emptyState } from "./dom.js"
 
 import { createModelPicker } from "./model_picker.js";
 
+import { mount as mountReasoning } from "./reasoning.js";
+
 const STORE_TEXT = {
   keychain: "the macOS Keychain",
   "secret-service": "the system keyring (Secret Service)",
@@ -26,8 +28,9 @@ function chip(r) {
 export function mount(root) {
   const body = h("div", { class: "xc-prov" });
   const counts = h("div", { class: "xc-phead-read" });
+  const reasoningRoot = h("div");
   root.replaceChildren(h("div", { class: "xc-pg" }, pageHead({ eyebrow: "05 / Providers", title: "Providers",
-    lede: "Where model keys live, which providers answer, and the model the main role uses.", aside: counts }), body));
+    lede: "Where model keys live, which providers answer, and the model the main role uses.", aside: counts }), reasoningRoot, body));
   let alive = true;
 
   if (!sessionStorage.getItem("xc-token")) {
@@ -36,6 +39,7 @@ export function mount(root) {
     return () => { alive = false; };
   }
 
+  const stopReasoning = mountReasoning(reasoningRoot);
   const results = {};   // provider name -> {text, cls}; kept across redraws, never holds a key
   let data = null, models = null, err = "", picked = "", modelsError = "", savingDefault = false, loadGeneration = 0;
 
@@ -162,5 +166,5 @@ export function mount(root) {
 
   draw();
   load();
-  return () => { alive = false; };
+  return () => { alive = false; stopReasoning(); };
 }
