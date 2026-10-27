@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var window: NSWindow?
     private var webView: WKWebView?
     private var origin: URL?
+    private var panePreferences: PanePreferences?
     private var launcher = ExoWebLauncher()
     private var isAttached: Bool { Bundle.main.object(forInfoDictionaryKey: "ExoAttachedCore") as? Bool == true }
     private var transitioning = false
@@ -26,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        let panePreferences = PanePreferences { [weak self] in self?.origin }
+        self.panePreferences = panePreferences
+        configuration.userContentController.addScriptMessageHandler(panePreferences, contentWorld: .page, name: "exoPaneLayout")
         let webView = WKWebView(frame: window.contentView?.bounds ?? .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -41,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private func startServer() {
         guard !terminating, let webView else { return }
         transitioning = true
+        origin = nil
         let currentLauncher = launcher
         webView.loadHTMLString("<html><body style=\"font:20px -apple-system;padding:48px\">Starting Exo…</body></html>", baseURL: nil)
         launcher.onExit = { [weak self, weak currentLauncher] _ in
@@ -168,6 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard !isAttached else { return }
         guard !terminating, !transitioning, !showingFailure else { return }
         transitioning = true
+        origin = nil
         let currentLauncher = launcher
         currentLauncher.stopWebServer {
           currentLauncher.stopCore { code in
