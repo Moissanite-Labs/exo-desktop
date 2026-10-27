@@ -7,6 +7,9 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 
 ### Fixed
 
+- The chat status strip keeps a known route limit while `/context` is pending or fails, instead of briefly
+  showing `Limit unknown` with no bar (#61). With an unknown limit it reads `About X on the next call.
+  Limit unknown.` with no bar, and only a positive whole-number route limit counts as known.
 - Context: `_carry_pins` reads the parent's pins fresh from disk, so a pin the parent undid does not resurrect in a child bound from it (#645).
 - A `$((` bash reads as a command substitution is read as one now (#553). bash closes the `$( ` at the first `)`
   outside quotes, backquotes, `$( )` bodies and comments, and reads the span as arithmetic only when the text

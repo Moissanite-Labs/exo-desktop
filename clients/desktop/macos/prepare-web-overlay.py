@@ -22,7 +22,7 @@ for name, digest in expected.items():
 if source in target.parents or target in source.parents:
     p.error('output must be separate from the selected plugins')
 if a.with_model_picker:
-    accepted = {'chat.js': ['a8bc3ec5746548d835397fcfb4e1733e5ca6ac81679f907ed9a1f13bd5c69e91', '16c8ce283226807fae222f952da5fea8f62d0e8f525b4c50ecb12fdeff2ddd60'], 'providers.js': ['31bf3bbcb5066d5b1fab1dd23f970a66cbf8ed0d113b0be0fbae728fbf77a2d2'], 'style.css': ['df87e01ebc8f869bde86de7e1c485b10828832d353b397d8b4c2772ec07c6ac3']}
+    accepted = {'chat.js': ['a8bc3ec5746548d835397fcfb4e1733e5ca6ac81679f907ed9a1f13bd5c69e91', '16c8ce283226807fae222f952da5fea8f62d0e8f525b4c50ecb12fdeff2ddd60', 'bfc90c7e9031315a77f92d0990a1d23661180563a470e7c0578b92d3a26052b9'], 'providers.js': ['31bf3bbcb5066d5b1fab1dd23f970a66cbf8ed0d113b0be0fbae728fbf77a2d2'], 'style.css': ['df87e01ebc8f869bde86de7e1c485b10828832d353b397d8b4c2772ec07c6ac3']}
     for name, digests in accepted.items():
         if hashlib.sha256((source / 'exo-command/exo_command/static' / name).read_bytes()).hexdigest() not in digests:
             p.error('selected web asset differs from the verified picker baseline: ' + name)
