@@ -360,7 +360,9 @@ What the gate asks about, and why:
   `setsid`, `flock` or `watch` (#160, fixed in #196), and a heredoc or pipe into a group such as `{ bash; }`
   (#161, fixed in #198). The gate finds programs only in the shell forms its parser reads. A command inside a
   parameter expansion such as `${x:-$(...)}` is not seen, so it runs without asking (#143, fix in review in
-  #158). A command nested more than four levels deep
+  #158). A `${name@P}` prompt transformation runs the value's command substitutions and parameters, so
+  `printf -v p '%s(%s)' '$' 'id'; echo ${p@P}` asks (#579), and `p=x; echo ${p@P}` stays a read when the line
+  assigns `p` a literal value with no `$`, backtick or backslash. A command nested more than four levels deep
   (`bash -c` inside `bash -c` and so on) or an `ssh` or `mosh` chain more than four hops deep (#153) asks, even
   when your policy denies it (#137).
 - **A deny holds for every command on a line (D-075).** A `deny:` or `reserved` entry in your policy is checked
@@ -449,7 +451,8 @@ with the exact command. `/permissions` shows the counts. `/permissions ask` turn
 Only you can turn it on, from your own window or page. The agent, a tool it runs, a peer or a bus message cannot. It
 lasts until the core stops; the next start asks again unless you give the flag again. To make it the default for a
 seat, put `[permissions] mode = "bypass"` in the seat file (`docs/SEATS.md`); changing a seat file always asks you.
-On an Exo OS installation (a required tool executor) bypass is not available.
+On an Exo OS installation (a required tool executor) bypass is not available. It is your consent, and it covers only
+your own turns: a turn a peer, a bus wake, a job notice or a local caller started asks as if bypass were off.
 
 Details: `docs/GATE.md`.
 
