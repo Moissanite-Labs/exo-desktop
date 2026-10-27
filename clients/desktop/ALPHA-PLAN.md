@@ -12,7 +12,7 @@ This plan records the 2026-10-27 alpha feedback and source review at `9be0eb22`.
 
 ## 1. Package a stable desktop runtime
 
-Status: planned. Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/31).
+Status: mechanism implemented on the fix branch for [issue #31](https://github.com/aska-digital/exo-desktop/issues/31) (bundled runtime layout, packaged launcher, versioned overlay, layout tests); native acceptance below still pending. Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/31).
 
 The isolated installer uses its checkout's Python environment and assets. Attached mode uses the explicitly selected executable and plugins. The current local installation selects a Canary environment and a separate copied plugin overlay. Neither mode is a portable app bundle. Moving, removing or incompatibly updating those dependencies can break a later launch.
 
