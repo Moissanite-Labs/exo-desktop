@@ -548,7 +548,7 @@ export function mount(root) {
       if (args) { await chooseModel(args, defaults, sid); return true; }
       const picker = createModelPicker({ label: defaults ? "Default model for new threads" : "Main model", selected: model,
         applyLabel: defaults ? "Set default" : "Use model",
-        note: defaults ? "Saves the default for new threads and changes the shared core’s main route. Existing fallbacks remain."
+        note: defaults ? "Saves the default for new threads. Applies to the shared core now or on its next start."
           : "Changes the shared core’s main route. Existing fallbacks remain.",
         onCancel: closePicker, onApply: async ref => {
           if (sid !== current || generation !== pickerGeneration || changingModel) return;

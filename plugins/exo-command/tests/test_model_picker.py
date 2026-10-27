@@ -84,7 +84,7 @@ def test_empty_loading_error_and_pending_duplicate_guards(page):
     assert page.eval('document.querySelector("[role=status]").textContent.includes("No models listed")')
 
 
-def mount_view(page, view):
+def mount_view(page, view, applied='true'):
     page.eval(r'''(async()=>{
       window.posts=[];
       const models={models:[{route:'alpha:sonnet',name:'Sonnet',provider:'Alpha'}],
@@ -94,7 +94,7 @@ def mount_view(page, view):
         let data={};
         if(path.endsWith('/models'))data=models;
         else if(path==='/api/providers')data={providers:[],ready:true};
-        else if(path==='/api/providers/default')data={applied:true};
+        else if(path==='/api/providers/default')data={applied:''' + applied + r'''};
         else if(path==='/api/complete/commands')data={commands:[{name:'model'},{name:'default'}],core:[],client:[],guidance:false};
         else if(path==='/api/chat/sessions')data={sessions:[{id:'s1',model:'alpha:sonnet'},{id:'s2',model:'alpha:sonnet'}]};
         else if(/^\/api\/chat\/sessions\/s[12]$/.test(path))data={session:{id:path.split('/').pop(),model:'alpha:sonnet'},messages:[],seq:0};
@@ -131,7 +131,7 @@ def test_chat_search_preserves_thread_and_default_routes_and_returns_focus(page,
     page.wait('document.querySelectorAll(".xc-sess").length === 2')
     command(page, text)
     page.wait('!!document.querySelector("[role=combobox]")')
-    assert page.eval('document.querySelector(".xc-model-note").textContent.includes("shared core’s main route")')
+    assert page.eval('document.querySelector(".xc-model-note").textContent.includes("shared core")')
     assert page.eval('document.querySelector(".xc-model-note").textContent.includes("default for new threads")') == (text == '/default')
     search(page, 'beta sonnet')
     assert page.eval('posts.filter(p=>p.path.endsWith("/model")||p.path.endsWith("/default")).length') == 0
@@ -188,3 +188,12 @@ def test_model_search_ignores_name_punctuation_and_prioritizes_exact_route(page)
     key(page, 'Enter')
     page.wait('applied.length === 2')
     assert page.eval('applied')[-1] == 'beta:gpt6'
+
+
+def test_providers_next_start_reply_is_not_shown_as_applied_now(page):
+    mount_view(page, 'providers', applied='"next start"')
+    page.wait('!!document.querySelector("[role=combobox]")')
+    search(page, 'beta')
+    key(page, 'Enter')
+    page.wait('document.querySelector(".xc-model-status").textContent.includes("core will use it on next start")')
+    assert page.eval('posts') == [{'path': '/api/providers/default', 'body': {'ref': 'beta:sonnet', 'role': 'main'}}]

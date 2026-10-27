@@ -119,7 +119,7 @@ export function mount(root) {
       const d = await api("POST", "/api/providers/default", { ref, role: "main" });
       if (!alive) return;
       picked = ref;
-      results._default = { text: "Default set to " + ref + (d.applied ? "." : ". Saved; the core will use it on next start."), cls: "ok" };
+      results._default = { text: "Default set to " + ref + ((d.applied === true || d.applied === "now") ? "." : ". Saved; the core will use it on next start."), cls: "ok" };
     } catch (e) { if (alive) throw e; }
     finally { savingDefault = false; }
     // Let the picker finish and restore focus before a background refresh.
