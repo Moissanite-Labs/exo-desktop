@@ -53,9 +53,15 @@ python3 clients/desktop/macos/prepare-web-overlay.py \
   --output /path/to/new-desktop-plugins
 ```
 
-This copies the selected plugins and replaces only `exo-command`'s `server.py` and `service.py`. It leaves the running core and original runtime files untouched. Use it only when those two original files match this branch's base version. Fresh page event streams use the recent event cache; saved transcripts still come from the core. Replay waits for the browser to consume each event so a large history cannot fill the web process's output buffer and freeze the app.
+This copies the selected plugins and replaces `exo-command`'s `server.py` and `service.py`, plus the `reasoning.py` HTTP edge.
+
+It leaves the running core and original runtime files untouched. Use it only when those two original files match this branch's base version.
+
+Fresh page event streams use the recent event cache. Saved transcripts still come from the core. Replay waits for the browser to consume each event so a large history cannot fill the web process's output buffer and freeze the app.
 
 Add `--with-model-picker` to also install the searchable chat and Providers pickers. This option checks the supported asset versions and patches chat without replacing runtime-specific commands. Names, providers and full routes can be searched, including punctuation-free queries such as `gpt6`. Use the arrow keys and Enter to select, or Escape to cancel. Typing alone does not change the model.
+
+This option also copies the `reasoning.js` dependency used by Providers. The overlay does not upgrade the core. Reasoning controls return an upgrade response when the selected core lacks that capability.
 
 For separate agent GitHub credentials, see [per-seat GitHub authentication](../../docs/GITHUB-AUTH.md). It needs a core version containing that feature. Updating this web overlay alone does not enable it in an older core.
 
