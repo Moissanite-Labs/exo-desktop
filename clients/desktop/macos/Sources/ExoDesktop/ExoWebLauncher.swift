@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Starts `exo web` and returns its page address.
 ///
@@ -24,6 +25,8 @@ final class ExoWebLauncher: @unchecked Sendable {
             case .timedOut:
                 return "`exo web` did not print a page address within 30 seconds."
             case .exited(let code):
+                if code == 69 { return "The selected core socket is unavailable. Start that core separately, then retry. The desktop will not start a replacement core." }
+                if code == 72 { return "The selected desktop runtime is unavailable. Reinstall the app with a working runtime." }
                 if code == 1 {
                     return "`exo web` exited. Its port may already be in use. Use the page that is already open, or set EXO_DESKTOP_PORT to a free port."
                 }
@@ -37,6 +40,17 @@ final class ExoWebLauncher: @unchecked Sendable {
     private var errorPipe: Pipe?
     private var output = ""
     private var finished = false
+    private var hasPage = false
+    private var stopping = false
+    var onExit: ((Int32) -> Void)?
+
+    private var environment: [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        env["PATH"] = [home + "/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", env["PATH"] ?? "", "/usr/bin", "/bin"].joined(separator: ":")
+        env["PYTHONUNBUFFERED"] = "1"
+        return env
+    }
     private var startCompletion: ((Result<URL, LaunchError>) -> Void)?
     private let lock = NSLock()
 
@@ -60,11 +74,12 @@ final class ExoWebLauncher: @unchecked Sendable {
         startCompletion = completion
         lock.unlock()
         let port = ProcessInfo.processInfo.environment["EXO_DESKTOP_PORT"]
-            .flatMap(Int.init) ?? 7342
+            .flatMap(Int.init) ?? (exo.lastPathComponent == "exo-alpha" ? 0 : 7342)
         let process = Process()
         process.executableURL = exo
         process.arguments = ["web", "--port", "\(port)", "--no-open"]
-        process.environment = ProcessInfo.processInfo.environment
+        process.environment = environment
+        process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         let outputPipe = Pipe()
         let errorPipe = Pipe()
         process.standardOutput = outputPipe
@@ -87,7 +102,8 @@ final class ExoWebLauncher: @unchecked Sendable {
             if self.output.count > 8192 {
                 self.output = String(self.output.suffix(8192))
             }
-            let page = self.pageURL(from: self.output)
+            let complete = self.output.components(separatedBy: "\n").dropLast().joined(separator: "\n")
+            let page = self.pageURL(from: complete)
             self.lock.unlock()
             if let page = page {
                 self.finish(with: .success(page))
@@ -95,11 +111,18 @@ final class ExoWebLauncher: @unchecked Sendable {
         }
         process.terminationHandler = { [weak self] proc in
             guard let self = self else { return }
+            self.lock.lock()
+            let started = self.hasPage
+            let stopping = self.stopping
+            self.lock.unlock()
             self.finish(with: .failure(.exited(proc.terminationStatus)))
+            self.clearPipes()
+            if started && !stopping { self.onExit?(proc.terminationStatus) }
         }
         do {
             try process.run()
         } catch {
+            clearPipes()
             finish(with: .failure(.launchFailed))
             return
         }
@@ -122,19 +145,24 @@ final class ExoWebLauncher: @unchecked Sendable {
             completion()
             return
         }
-        let semaphore = DispatchSemaphore(value: 0)
-        proc.terminationHandler = { _ in semaphore.signal() }
-        if !proc.isRunning {
-            semaphore.signal()
-        }
-        proc.interrupt()
+        lock.lock()
+        stopping = true
+        lock.unlock()
         DispatchQueue.global().async {
-            if semaphore.wait(timeout: .now() + 5) == .timedOut, proc.isRunning {
-                proc.terminate()
-                proc.waitUntilExit()
-            }
+            proc.interrupt()
+            self.wait(proc, seconds: 2)
+            if proc.isRunning { proc.terminate() }
+            self.wait(proc, seconds: 1)
+            if proc.isRunning { kill(proc.processIdentifier, SIGKILL) }
+            self.wait(proc, seconds: 1)
+            self.clearPipes()
             completion()
         }
+    }
+
+    private func wait(_ proc: Process, seconds: Double) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while proc.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
     }
 
     /// Stops the background core. Runs `exo stop` once.
@@ -147,12 +175,16 @@ final class ExoWebLauncher: @unchecked Sendable {
             let process = Process()
             process.executableURL = exo
             process.arguments = ["stop"]
+            process.environment = self.environment
+            process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             do {
                 try process.run()
-                process.waitUntilExit()
-                completion(process.terminationStatus)
+                self.wait(process, seconds: 5)
+                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                self.wait(process, seconds: 1)
+                completion(process.isRunning ? 1 : process.terminationStatus)
             } catch {
                 completion(1)
             }
@@ -166,13 +198,17 @@ final class ExoWebLauncher: @unchecked Sendable {
             return
         }
         finished = true
+        if case .success = result { hasPage = true }
         output = ""
         let completion = startCompletion
         startCompletion = nil
         lock.unlock()
+        completion?(result)
+    }
+
+    private func clearPipes() {
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         errorPipe?.fileHandleForReading.readabilityHandler = nil
-        completion?(result)
     }
 
     private func pageURL(from text: String) -> URL? {
@@ -193,7 +229,9 @@ final class ExoWebLauncher: @unchecked Sendable {
            !override.isEmpty {
             return URL(fileURLWithPath: override)
         }
-        let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        let bundled = Bundle.main.resourceURL?.appendingPathComponent("exo-alpha")
+        if let bundled, FileManager.default.isExecutableFile(atPath: bundled.path) { return bundled }
+        let path = environment["PATH"] ?? ""
         for dir in path.split(separator: ":") {
             let candidate = URL(fileURLWithPath: String(dir)).appendingPathComponent("exo")
             if FileManager.default.isExecutableFile(atPath: candidate.path) {
