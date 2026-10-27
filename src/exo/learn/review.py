@@ -109,7 +109,7 @@ def needs_review(events: list[dict], turns: int, every: int) -> str | None:
     for e in events:
         if e["kind"] == "ruling" or (e["kind"] == "verdict" and (e["body"] or {}).get("verdict") in CORRECTION_VERDICTS):
             return "signal"
-    if events and turns >= every:
+    if turns >= every:
         return "turns"
     return None
 
