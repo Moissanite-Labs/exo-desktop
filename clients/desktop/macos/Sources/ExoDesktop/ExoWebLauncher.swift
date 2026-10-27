@@ -1,0 +1,165 @@
+import Foundation
+
+/// Starts `exo web` and returns its page address.
+///
+/// The page address carries a token in its fragment. This class keeps that
+/// address in memory only. It never prints it, never logs it, and never
+/// writes it to disk. Error messages name the failure, not the address.
+final class ExoWebLauncher {
+    enum LaunchError: Error, CustomStringConvertible {
+        case exoNotFound
+        case timedOut
+        case exited(Int32)
+
+        var description: String {
+            switch self {
+            case .exoNotFound:
+                return "No `exo` binary was found on PATH. Install Exo first, or set EXO_DESKTOP_EXO."
+            case .timedOut:
+                return "`exo web` did not print a page address within 30 seconds."
+            case .exited(let code):
+                if code == 1 {
+                    return "`exo web` exited. Its port may already be in use. Use the page that is already open, or set EXO_DESKTOP_PORT to a free port."
+                }
+                return "`exo web` exited with code \(code)."
+            }
+        }
+    }
+
+    private var process: Process?
+    private var outputPipe: Pipe?
+    private var errorPipe: Pipe?
+    private var output = ""
+    private var finished = false
+    private let lock = NSLock()
+
+    func start(completion: @escaping (Result<URL, LaunchError>) -> Void) {
+        guard let exo = findExo() else {
+            completion(.failure(.exoNotFound))
+            return
+        }
+        let port = ProcessInfo.processInfo.environment["EXO_DESKTOP_PORT"]
+            .flatMap(Int.init) ?? 7342
+        let process = Process()
+        process.executableURL = exo
+        process.arguments = ["web", "--port", "\(port)", "--no-open"]
+        process.environment = ProcessInfo.processInfo.environment
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        self.process = process
+        self.outputPipe = outputPipe
+        self.errorPipe = errorPipe
+
+        // Drain stderr so a full pipe cannot stall the server. Its content
+        // is never shown, because it must not become a place a token leaks.
+        errorPipe.fileHandleForReading.readabilityHandler = { handle in
+            _ = handle.availableData
+        }
+        outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            guard let self = self else { return }
+            let data = handle.availableData
+            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+            self.lock.lock()
+            self.output += text
+            let page = self.pageURL(from: self.output)
+            self.lock.unlock()
+            if let page = page {
+                self.finish(with: .success(page), completion: completion)
+            }
+        }
+        process.terminationHandler = { [weak self] proc in
+            guard let self = self else { return }
+            self.finish(with: .failure(.exited(proc.terminationStatus)), completion: completion)
+        }
+        do {
+            try process.run()
+        } catch {
+            finish(with: .failure(.exoNotFound), completion: completion)
+            return
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [weak self] in
+            guard let self = self else { return }
+            self.process?.terminate()
+            self.finish(with: .failure(.timedOut), completion: completion)
+        }
+    }
+
+    /// Stops the web server. The core keeps running, as with `exo web`.
+    func stopWebServer() {
+        process?.interrupt()
+    }
+
+    /// Stops the background core. Runs `exo stop` once.
+    func stopCore(completion: @escaping (Int32) -> Void) {
+        guard let exo = findExo() else {
+            completion(127)
+            return
+        }
+        DispatchQueue.global().async {
+            let process = Process()
+            process.executableURL = exo
+            process.arguments = ["stop"]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            do {
+                try process.run()
+                process.waitUntilExit()
+                completion(process.terminationStatus)
+            } catch {
+                completion(1)
+            }
+        }
+    }
+
+    private func finish(
+        with result: Result<URL, LaunchError>,
+        completion: @escaping (Result<URL, LaunchError>) -> Void
+    ) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        lock.unlock()
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        completion(result)
+    }
+
+    private func pageURL(from text: String) -> URL? {
+        for word in text.components(separatedBy: .whitespacesAndNewlines) {
+            let candidate = String(word)
+            guard candidate.hasPrefix("http://127.0.0.1:")
+                || candidate.hasPrefix("http://localhost:") else { continue }
+            guard candidate.contains("/#token=") else { continue }
+            if let url = URL(string: candidate) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func findExo() -> URL? {
+        if let override = ProcessInfo.processInfo.environment["EXO_DESKTOP_EXO"],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override)
+        }
+        let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        for dir in path.split(separator: ":") {
+            let candidate = URL(fileURLWithPath: String(dir)).appendingPathComponent("exo")
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"] {
+            let candidate = URL(fileURLWithPath: dir).appendingPathComponent("exo")
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return nil
+    }
+}
