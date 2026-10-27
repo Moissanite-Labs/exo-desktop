@@ -19,6 +19,10 @@ expected = {'server.py': '468e418162677248da50e1724f4587497af53026c672a9825aa635
 for name, digest in expected.items():
     if hashlib.sha256((source / 'exo-command/exo_command' / name).read_bytes()).hexdigest() != digest:
         p.error('selected web implementation differs from the verified replay-fix baseline: ' + name)
+# The copied server publishes core status consumed by these paired assets.
+for name, digest in {'app.js': '2d7ec05b2a032eeb2e00e8f1bc957f33b87e4a3d1289c7ca8d44369262ad1409', 'bus.js': '8e8f0c57bf4eab186a1cc69dc7cbd180c5045be9840c18173b5a63d0d3f7445a'}.items():
+    if hashlib.sha256((source / 'exo-command/exo_command/static' / name).read_bytes()).hexdigest() != digest:
+        p.error('selected web asset differs from the verified connection baseline: ' + name)
 if source in target.parents or target in source.parents:
     p.error('output must be separate from the selected plugins')
 if a.with_model_picker:
@@ -30,6 +34,8 @@ shutil.copytree(source, target, ignore=shutil.ignore_patterns('__pycache__', '*.
 patched = Path(__file__).resolve().parents[3] / 'plugins/exo-command/exo_command'
 for name in ('server.py', 'service.py'):
     shutil.copy2(patched / name, target / 'exo-command/exo_command' / name)
+for name in ('app.js', 'bus.js'):
+    shutil.copy2(patched / 'static' / name, target / 'exo-command/exo_command/static' / name)
 if a.with_model_picker:
     assets = target / 'exo-command/exo_command/static'
     patch = Path(__file__).resolve().parent / 'patches/model-picker-chat.patch'
