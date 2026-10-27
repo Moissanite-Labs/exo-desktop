@@ -51,7 +51,7 @@ Future candidates include a command palette, recent/favorite models, richer prov
 
 ## Implementation status
 
-The original searchable picker implementation is in `facbeb97`, tracked by [desktop picker issue](https://github.com/aska-digital/exo-desktop/issues/33). Eight browser regressions cover filtering, exact routes, keyboard use, cancellation and stale requests. Native macOS acceptance confirmed search in chat and Providers after reload, without changing the selected model or restarting the existing core.
+The original searchable picker implementation is in `facbeb97`, tracked by [desktop picker issue](https://github.com/aska-digital/exo-desktop/issues/33). Browser regressions cover filtering, exact routes, keyboard use, cancellation, stale requests and deferred default-model changes. Native macOS acceptance confirmed search in chat and Providers after reload, without changing the selected model or restarting the existing core.
 
 The CLI and core credential implementation is in `71340dcb`, with the canonical port proposed in [canonical core PR](https://github.com/aska-digital/exo/pull/672). Its [setup guide](../../docs/GITHUB-AUTH.md) describes token and private-login modes, secret storage and the trusted-shell boundary. It does not enable credentials in an older running core.
 
