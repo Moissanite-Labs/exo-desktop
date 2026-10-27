@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var window: NSWindow?
     private var webView: WKWebView?
     private var origin: URL?
@@ -10,6 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var transitioning = false
     private var terminating = false
     private var showingFailure = false
+    // Interface state only: the view, thread, layout and transcript position the page needs to restore itself.
+    // The page access token is never stored here, never injected, and never logged. Conversations and memory
+    // stay in the core; this is only the pointer back to where the user was.
+    private let frameAutosaveName = "ExoDesktopMain"
+    private let prefsKey = "ExoDesktopUIPrefs"
+    private let prefViews = ["chat", "tasks", "schedule", "command", "providers"]
+    private let prefLayouts = ["inverse", "classic"]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -19,13 +26,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             backing: .buffered,
             defer: false
         )
-        window.center()
         window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Exo"
+        window.delegate = self
+        window.setFrameAutosaveName(frameAutosaveName)
+        let hadSavedFrame = UserDefaults.standard.string(forKey: "NSWindow Frame \(frameAutosaveName)") != nil
+        window.setFrameUsingName(frameAutosaveName)
+        if !hadSavedFrame || !NSScreen.screens.contains(where: { window.frame.intersects($0.visibleFrame) }) {
+            window.center()
+        }
         window.makeKeyAndOrderFront(nil)
         self.window = window
 
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
+        // Persistent, app-private store: the page's own saved choices (layout, and the desktop-state copy
+        // in localStorage) survive quit/reopen. The page token is sessionStorage, which a new web view does
+        // not carry over; each launch gets a fresh token in the page URL fragment, in memory only.
+        // Persistence alone is not enough: browser storage belongs to an origin, and an origin includes
+        // its port, so the launcher also pins the loopback port (see ExoWebLauncher) and the app keeps a
+        // port-independent copy of the same preferences below, injected before page scripts run.
+        configuration.websiteDataStore = .default()
+        let contentController = WKUserContentController()
+        contentController.add(self, name: "exoDesktop")
+        contentController.addUserScript(WKUserScript(source: desktopPrefsScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        configuration.userContentController = contentController
         let webView = WKWebView(frame: window.contentView?.bounds ?? .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -36,6 +59,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         buildMenu()
         NSApp.activate(ignoringOtherApps: true)
         startServer()
+    }
+
+    // The port-independent copy of the page's restoration preferences, as a script the page reads as
+    // window.__exoDesktopPrefs before its own scripts run. Only the allowlisted keys are injected, and
+    // the value is built from the stored dictionary, so a token could not reach the page this way even
+    // if one were posted: the message handler below refuses to store anything but the allowlist.
+    private func desktopPrefsScript() -> String {
+        let stored = UserDefaults.standard.dictionary(forKey: prefsKey) ?? [:]
+        let cleaned = cleanPrefs(stored)
+        guard let data = try? JSONSerialization.data(withJSONObject: cleaned, options: []),
+              let json = String(data: data, encoding: .utf8) else {
+            return "window.__exoDesktopPrefs = {};"
+        }
+        return "window.__exoDesktopPrefs = \(json);"
+    }
+
+    private func cleanPrefs(_ value: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        if let view = value["view"] as? String, prefViews.contains(view) { out["view"] = view }
+        if let thread = value["thread"] as? String, !thread.isEmpty, thread.count <= 200 { out["thread"] = thread }
+        if let layout = value["layout"] as? String, prefLayouts.contains(layout) { out["layout"] = layout }
+        if let scroll = value["scroll"] as? Double, scroll >= 0, scroll <= 1 { out["scroll"] = scroll }
+        return out
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "exoDesktop", let body = message.body as? [String: Any] else { return }
+        var stored = UserDefaults.standard.dictionary(forKey: prefsKey) ?? [:]
+        for (key, value) in cleanPrefs(body) { stored[key] = value }
+        UserDefaults.standard.set(stored, forKey: prefsKey)
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        window?.saveFrame(usingName: frameAutosaveName)
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        window?.saveFrame(usingName: frameAutosaveName)
     }
 
     private func startServer() {
@@ -84,6 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // Stops the web server first, then allows termination. The core
         // keeps running, as with `exo web`.
+        window?.saveFrame(usingName: frameAutosaveName)
         terminating = true
         transitioning = true
         launcher.onExit = nil
