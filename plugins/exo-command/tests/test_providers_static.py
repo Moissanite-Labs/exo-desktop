@@ -30,6 +30,11 @@ def test_no_local_storage_anywhere():
         if f.name == "layout.js":  # D-046: the one exception, the layout choice. It never sees keys or text.
             assert "setItem(KEY" in body.replace("(store || localStorage).setItem(KEY", "setItem(KEY") and 'const KEY = "xc-layout"' in body
             continue
+        if f.name == "desktop_state.js":  # issue 30: the restoration preferences (view, thread, layout, scroll).
+            # The one key, written only through the allowlist that drops tokens, codes, URLs and fragments.
+            assert 'DESKTOP_STATE_KEY = "xc-desktop-state"' in body and "cleanPrefs" in body
+            assert "xc-token" not in body
+            continue
         assert "localStorage" not in body, f.name
 
 
@@ -61,7 +66,7 @@ def test_app_strips_the_token_from_the_url():
     assert 'sessionStorage.setItem("xc-token"' in js
     assert "history.replaceState" in js
     i = js.index("takeToken();")
-    assert i < js.index("show((location.hash")           # before the first view reads the hash
+    assert i < js.index("show(urlView ||")           # before the first view reads the hash
     assert i < js.index("await bus.start()")
 
 

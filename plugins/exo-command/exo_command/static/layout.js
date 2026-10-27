@@ -3,15 +3,18 @@
 //   classic: the box is at the bottom and the newest item is at the bottom.
 // The experiment ships with `inverse` as the default. To end it, change DEFAULT_LAYOUT to "classic": a person who
 // picked a layout (the button or /layout) keeps their pick, because it is saved in this browser (localStorage).
+// In the desktop app a second copy comes from the app itself (see desktop_state.js): when the browser copy is
+// missing, e.g. after the page moved to a new port, the app copy is the fallback, not a new default.
 export const DEFAULT_LAYOUT = "inverse";
 export const LAYOUTS = ["inverse", "classic"];
 const KEY = "xc-layout";
 
-export function getLayout(store) {
+export function getLayout(store, fallback) {
   try {
     const v = (store || localStorage).getItem(KEY);
-    return LAYOUTS.includes(v) ? v : DEFAULT_LAYOUT;
-  } catch (e) { return DEFAULT_LAYOUT; }
+    if (LAYOUTS.includes(v)) return v;
+  } catch (e) { /* fall through to the fallback, then the default */ }
+  return LAYOUTS.includes(fallback) ? fallback : DEFAULT_LAYOUT;
 }
 
 export function setLayout(v, store) {

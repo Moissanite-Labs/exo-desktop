@@ -8,12 +8,15 @@ import * as schedule from "./schedule.js";
 import * as command from "./command.js";
 import * as providers from "./providers.js";
 import * as permissions from "./permissions.js";
+import { readState, writeState, notifyApp } from "./desktop_state.js";
 
 const VIEWS = [["chat", "Chat", chat], ["tasks", "Tasks", tasks], ["schedule", "Schedule", schedule], ["command", "Command", command], ["providers", "Providers", providers]];
 
 // The page token arrives in the URL fragment of the link `exo web` prints; every request needs it (D-039). Keep it in this tab's
 // sessionStorage only, then take it out of the address bar and history.
 let launchRefused = "";   // why a #code= link gave no token: shown instead of a view
+let urlView = null;   // the view the launch link itself named, if any: a reload/launch link names none, so the
+  // saved view (desktop_state.js) is what restores the page the user was on
 function takeToken() {
   const parts = (location.hash || "").slice(1).split("&").filter(Boolean);
   const t = parts.find((x) => x.startsWith("token="));
@@ -21,7 +24,9 @@ function takeToken() {
   let value;
   try { value = decodeURIComponent(t.slice(6)); } catch (e) { return false; }
   if (value) { sessionStorage.setItem("xc-token", value); launchRefused = ""; }
-  const view = parts.find((x) => !x.startsWith("token=")) || "chat";
+  const named = parts.find((x) => !x.startsWith("token="));
+  if (named) urlView = named;
+  const view = named || "chat";
   history.replaceState(null, "", location.pathname + location.search + "#" + view);
   return !!value;
 }
@@ -32,7 +37,9 @@ async function takeCode() {
   const parts = (location.hash || "").slice(1).split("&").filter(Boolean);
   const c = parts.find((x) => x.startsWith("code="));
   if (!c) return false;
-  const view = parts.find((x) => !x.startsWith("code=")) || "chat";
+  const named = parts.find((x) => !x.startsWith("code="));
+  if (named) urlView = named;
+  const view = named || "chat";
   history.replaceState(null, "", location.pathname + location.search + "#" + view);
   let got = {};
   try { got = await redeem(decodeURIComponent(c.slice(5))); } catch (e) { got = {}; }
@@ -67,6 +74,7 @@ function show(id) {
   const v = VIEWS.find((x) => x[0] === id) || VIEWS[0];
   if (unmount) { try { unmount(); } catch (e) { console.error(e); } }
   current = v[0];
+  writeState(undefined, { view: current }, notifyApp);
   if (location.hash !== "#" + current) history.replaceState(null, "", "#" + current);
   where.textContent = "";
   dot.classList.remove("on");
@@ -117,7 +125,9 @@ if (token()) boot([
 ]);
 if (token()) await bus.start();   // loads open panels, then follows the event stream
 if (token()) permissions.start();
-show((location.hash || "").slice(1));
+// A launch link that names a view wins; otherwise the saved view restores the page the user was on, and
+// only then does the address bar's view (the default "chat" after a token strip) apply.
+show(urlView || readState(undefined, window.__exoDesktopPrefs).view || (location.hash || "").slice(1));
 window.addEventListener("hashchange", async () => {
   const fresh = takeToken() || await takeCode();
   if (fresh) await bus.restart();
