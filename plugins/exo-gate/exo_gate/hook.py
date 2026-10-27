@@ -614,7 +614,7 @@ class Gate:
             card = {"action": "approve", "message": f"exo-gate could not classify {tool_name} ({exc}). "
                                                     "Approve only if you expected this action. Default if no reply: skip.",
                     "rule_key": f"exo-gate:error:{tool_name}", "once": True}
-            if store:   # a store write or secret the gate read: the principal answers, once, in every mode (D-033)
+            if store or secret:   # a store write or secret the gate read: the principal answers, once, in every mode (D-033)
                 card.update(approvers=["principal"])
             return card
 
