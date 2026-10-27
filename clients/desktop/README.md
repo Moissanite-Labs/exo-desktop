@@ -16,11 +16,60 @@ clients/desktop/macos/install-local-alpha.sh
 open "$HOME/Applications/Exo Desktop Alpha.app"
 ```
 
-The installer runs `uv sync --frozen --extra tui --extra mcp` in this checkout, builds and ad hoc signs the app, then installs it in `~/Applications`. Keep the checkout in place: its `.venv` and repo-relative web assets are the runtime. Reinstall after updating sources. An existing alpha app is preserved with a timestamp and process number in its `.previous` backup name. Signing errors fail the build/install.
+The installer runs `uv sync --frozen --extra tui --extra mcp` in this checkout, builds and ad hoc signs the app, then installs it in `~/Applications`. An existing alpha app is preserved with a timestamp and process number in its `.previous` backup name. Signing errors fail the build/install.
+
+By default the installer uses this checkout's `.venv` as the runtime, so keep the checkout in place and reinstall after updating sources. That source install is the development path. The packaged install below is the one that survives a moved checkout.
 
 The alpha bundles a launcher which uses this checkout's Python environment. It sets `EXO_HOME` to `~/Library/Application Support/Exo Desktop Alpha/runtime`, works in the sibling `workspace` folder, and requests an available local port. It does not replace `~/.local/bin/exo` or read the normal `~/.exo` configuration. First launch creates its own Exo identity and configuration. CLI providers are found through `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and the system PATH. Existing CLI logins remain managed by those CLIs. The alpha clears `ANTHROPIC_API_KEY` for its child process so Claude CLI can use its existing subscription login; it does not copy credentials into the app.
 
 For local acceptance, launch from Finder, confirm the first-run page loads, select an available provider, send a short prompt, and check the reply. Paste using Command-V, open an external HTTPS link, then quit and reopen. Check that its own data persists, that the normal Exo data is untouched, and that quitting closes its web listener. These real provider/UI checks are separate from the launcher smoke tests.
+
+## Packaged runtime
+
+The packaged app does not depend on the source checkout existing. The build copies the runtime into the app bundle:
+
+```text
+Exo Desktop Alpha.app/Contents/Resources/
+  exo-alpha                  generated launcher (resolves from its own location)
+  runtime/
+    VERSION                  app version + source commit
+    SOURCE-COMMIT            source commit the runtime was built from
+    PYTHON-VERSION           pinned interpreter version
+    MANIFEST.json            file counts, python version, commit
+    python/                  pinned interpreter tree (python-build-standalone layout)
+    src/                     copy of the repo's src/ (the exo package)
+    plugins/                 copy of the repo's plugins/ (web assets live beside
+                             the plugin code, including the replay fix)
+    site-packages/           third-party dependencies from a synced staging env
+```
+
+`exo web` already resolves plugins from beside the `exo` package, so with `src/` and `plugins/` as siblings under `runtime/` that fallback lands inside the bundle. The launcher uses the bundled interpreter and sources, sets `EXO_PLUGIN_DIRS` to the bundled plugins, and never consults the checkout. A missing, damaged, or version-mismatched bundle fails with a clear reinstall message (exit 72); it never silently falls back to a moved checkout. The Swift launcher likewise refuses to fall through to a PATH `exo` when a bundled launcher exists but is not executable.
+
+Isolated packaged install (needs a pinned python-build-standalone tree for the target Mac):
+
+```sh
+clients/desktop/macos/install-local-alpha.sh --packaged \
+  --python-home /path/to/python-build-standalone
+```
+
+Attached installs keep using the selected external `exo` executable and core. Only the plugin overlay moves: `--package-overlay` copies the repo's plugins into a versioned folder under the app's own Application Support directory, and the launcher checks its `VERSION` file on every start:
+
+```sh
+clients/desktop/macos/install-local-alpha.sh \
+  --attach-socket "$HOME/.exo/run/agent-canary.sock" \
+  --exo /path/to/canary-environment/bin/exo \
+  --exo-home "$HOME/.exo" \
+  --seat canary --package-overlay
+```
+
+Verify in a checkout-free environment: package the app, move or rename the checkout, then launch the app from Finder and confirm the first-run page loads, a provider reply works, and quit/reopen works. The packaged app must behave identically with the checkout gone. Layout-only verification without a Mac toolchain:
+
+```sh
+clients/desktop/macos/build-macos-app.sh --dry-run
+python3 clients/desktop/macos/Tests/test_packaged_runtime.py
+```
+
+The native macOS build, signing check, and checkout-moved launch on Apple Silicon are still the acceptance step for this change; they cannot run on a Linux machine.
 
 ## Attach to an existing core
 
@@ -86,4 +135,4 @@ Quit the isolated app. To stop its alpha core left running, run:
 
 Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*` backups. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
 
-This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.
+This is a local alpha with ad hoc signing. It has no notarization or automatic updater. macOS distribution and Windows/Linux clients remain separate work.
