@@ -80,7 +80,7 @@ class Store:
         return [row_to_envelope(r) for r in rows]
 
     def messages(self, since: int = 0, to: str | None = None, thread: str | None = None,
-                 limit: int = 200) -> list[dict]:
+                 limit: int = 200, audiences: list[str] | None = None) -> list[dict]:
         where, params = "seq > ?", [since]
         if to:
             where += " AND EXISTS (SELECT 1 FROM json_each(log.to_json) WHERE value = ?)"
@@ -88,6 +88,10 @@ class Store:
         if thread:
             where += " AND thread = ?"
             params.append(thread)
+        if audiences:
+            marks = ",".join("?" * len(audiences))
+            where += f" AND EXISTS (SELECT 1 FROM json_each(log.to_json) WHERE value IN ({marks}))"
+            params.extend(audiences)
         return self._select(where, tuple(params), limit)
 
     def inbox(self, audiences: list[str], since: int = 0, limit: int = 200) -> list[dict]:
@@ -95,16 +99,27 @@ class Store:
         return self._select(f"seq > ? AND EXISTS (SELECT 1 FROM json_each(log.to_json) WHERE value IN ({marks}))",
                             (since, *audiences), limit)
 
-    def thread(self, thread_id: str, limit: int = 500) -> list[dict]:
-        return self._select("thread = ? OR id = ?", (thread_id, thread_id), limit)
+    def thread(self, thread_id: str, limit: int = 500, audiences: list[str] | None = None) -> list[dict]:
+        where = "thread = ? OR id = ?"
+        params: tuple = (thread_id, thread_id)
+        if audiences:
+            marks = ",".join("?" * len(audiences))
+            where += f" AND EXISTS (SELECT 1 FROM json_each(log.to_json) WHERE value IN ({marks}))"
+            params = params + tuple(audiences)
+        return self._select(where, params, limit)
 
     def recent(self, limit: int = 200) -> list[dict]:
         return self._select("1=1", (), limit, order="DESC")
 
-    def search(self, query: str, limit: int = 50) -> list[dict]:
+    def search(self, query: str, limit: int = 50, audiences: list[str] | None = None) -> list[dict]:
         like = f"%{query}%"
-        return self._select("enc_json IS NULL AND (body LIKE ? OR thread LIKE ? OR from_seat LIKE ?)",
-                            (like, like, like), limit, order="DESC")
+        where = "enc_json IS NULL AND (body LIKE ? OR thread LIKE ? OR from_seat LIKE ?)"
+        params: tuple = (like, like, like)
+        if audiences:
+            marks = ",".join("?" * len(audiences))
+            where += f" AND EXISTS (SELECT 1 FROM json_each(log.to_json) WHERE value IN ({marks}))"
+            params = params + tuple(audiences)
+        return self._select(where, params, limit, order="DESC")
 
     def claims(self, open_only: bool = True, limit: int = 200) -> list[dict]:
         """A claim is open until its author posts a report in the same thread."""
