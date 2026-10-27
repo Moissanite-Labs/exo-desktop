@@ -12,11 +12,34 @@ clients/desktop/macos/install-local-alpha.sh
 open "$HOME/Applications/Exo Desktop Alpha.app"
 ```
 
-The installer runs `uv sync --frozen --extra tui --extra mcp` in this checkout, builds and ad hoc signs the app, then installs it in `~/Applications`. Keep the checkout in place: its `.venv` and repo-relative web assets are the runtime. Reinstall after updating sources. An existing alpha app is preserved as `Exo Desktop Alpha.app.previous`; remove that backup before another replacement. Signing errors fail the build/install.
+The installer runs `uv sync --frozen --extra tui --extra mcp` in this checkout, builds and ad hoc signs the app, then installs it in `~/Applications`. Keep the checkout in place: its `.venv` and repo-relative web assets are the runtime. Reinstall after updating sources. An existing alpha app is preserved with a timestamp and process number in its `.previous` backup name. Signing errors fail the build/install.
 
 The alpha bundles a launcher which uses this checkout's Python environment. It sets `EXO_HOME` to `~/Library/Application Support/Exo Desktop Alpha/runtime`, works in the sibling `workspace` folder, and requests an available local port. It does not replace `~/.local/bin/exo` or read the normal `~/.exo` configuration. First launch creates its own Exo identity and configuration. CLI providers are found through `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and the system PATH. Existing CLI logins remain managed by those CLIs. The alpha clears `ANTHROPIC_API_KEY` for its child process so Claude CLI can use its existing subscription login; it does not copy credentials into the app.
 
 For local acceptance, launch from Finder, confirm the first-run page loads, select an available provider, send a short prompt, and check the reply. Paste using Command-V, open an external HTTPS link, then quit and reopen. Check that its own data persists, that the normal Exo data is untouched, and that quitting closes its web listener. These real provider/UI checks are separate from the launcher smoke tests.
+
+## Attach to an existing core
+
+To share an existing core's sessions and memory, install with its exact runtime, plugins, data home, seat and Unix socket. Replace these example paths with the existing core's settings:
+
+```sh
+clients/desktop/macos/install-local-alpha.sh \
+  --attach-socket "$HOME/.exo/run/agent-canary.sock" \
+  --exo /path/to/canary-environment/bin/exo \
+  --plugins /path/to/canary-checkout/plugins \
+  --exo-home "$HOME/.exo" \
+  --seat canary
+```
+
+Attached installation skips `uv sync` and uses the supplied executable and web assets. It requires the selected socket and runtime to exist. It passes an explicit socket to `exo web`, which disables automatic core startup. If that core is unavailable, Retry reconnects to the same socket. It never starts a replacement core. The bundled launcher rejects every command except `web`, and the app hides Stop Core. Quit and Reload stop only the app's own web process. The existing core keeps running.
+
+The attached app shares the selected core's real data. Removing the app does not remove that data. Do not follow the isolated alpha data-removal instructions for an attached installation. The normal alpha installer with no flags switches back to isolated mode.
+
+Test wrapper generation without accessing live data:
+
+```sh
+python3 clients/desktop/macos/Tests/test_attach_launcher.py
+```
 
 ## Generic shell build
 
@@ -35,12 +58,14 @@ The web view uses an ephemeral store. In-app navigation stays on the launched se
 
 ## Remove the alpha
 
-Quit the app. To stop an alpha core left running, run:
+These steps apply to an isolated installation only. For an attached installation, quit and remove the app and its backups. Leave the selected core and data home in place.
+
+Quit the isolated app. To stop its alpha core left running, run:
 
 ```sh
 "$HOME/Applications/Exo Desktop Alpha.app/Contents/Resources/exo-alpha" stop
 ```
 
-Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous` backup. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
+Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*` backups. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
 
 This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.

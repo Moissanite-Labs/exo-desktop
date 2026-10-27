@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var webView: WKWebView?
     private var origin: URL?
     private var launcher = ExoWebLauncher()
+    private var isAttached: Bool { Bundle.main.object(forInfoDictionaryKey: "ExoAttachedCore") as? Bool == true }
     private var transitioning = false
     private var terminating = false
     private var showingFailure = false
@@ -138,7 +139,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let exoMenuItem = NSMenuItem()
         let exoMenu = NSMenu(title: "Exo")
         exoMenu.addItem(NSMenuItem(title: "Reload Page", action: #selector(reloadPage), keyEquivalent: "r"))
-        exoMenu.addItem(NSMenuItem(title: "Stop Core", action: #selector(stopCore), keyEquivalent: ""))
+        if !isAttached {
+            exoMenu.addItem(NSMenuItem(title: "Stop Core", action: #selector(stopCore), keyEquivalent: ""))
+        }
         exoMenuItem.submenu = exoMenu
         mainMenu.addItem(exoMenuItem)
         let editItem = NSMenuItem()
@@ -162,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     @objc private func stopCore() {
+        guard !isAttached else { return }
         guard !terminating, !transitioning, !showingFailure else { return }
         transitioning = true
         let currentLauncher = launcher
