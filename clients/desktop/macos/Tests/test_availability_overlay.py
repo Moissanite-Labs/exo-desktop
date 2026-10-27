@@ -32,6 +32,7 @@ def test_overlay_carries_server_connection_assets_and_preserves_rounds(tmp_path,
     if picker:
         assert 'core unavailable' in (web / 'static/chat.js').read_text()
         assert 'Try stop' in (web / 'static/chat.js').read_text()
+        assert 'waiting for approval' in (web / 'static/chat.js').read_text()
 
 
 @pytest.mark.parametrize('name', ['app.js', 'bus.js'])
