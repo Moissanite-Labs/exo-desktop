@@ -4967,3 +4967,9 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   issue's five rows added to the corpus as tightened pairs.
 - **Docs:** `docs/GATE.md` "Store-path checks", "Secret-store paths", "Search tools", "Change limits",
   `CHANGELOG.md`.
+
+## D-085 (2026-10-27) Session-list limit clamped; malformed approval Content-Length gets a 400
+- **Status:** Accepted 2026-10-27 (PR for audit issue #55, desktop findings 1). Numbered D-085 to follow D-084 (gate-error cards, PR #23) and avoid D-083, the core budget decision carried on the alpha stack.
+- **Why:** a negative `limit` on `GET /api/chat/sessions` reached SQLite, where a negative LIMIT means unlimited, so one request could return every session. A malformed `Content-Length` on an approval answer raised inside `_approve` and the connection closed with no answer.
+- **Decision:** the session-list limit is clamped to 0..500, default 100. An approval answer whose `Content-Length` is not a number, or is negative, gets a 400 answer naming the bad header.
+- **Docs:** `docs/ui/WEB.md` "Opening the page and the page token" and "What is where".
