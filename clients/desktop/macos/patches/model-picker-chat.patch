@@ -1,5 +1,5 @@
 diff --git a/plugins/exo-command/exo_command/static/chat.js b/plugins/exo-command/exo_command/static/chat.js
-index 7643abc1..2aaee996 100644
+index 7643abc1..be0cf738 100644
 --- a/plugins/exo-command/exo_command/static/chat.js
 +++ b/plugins/exo-command/exo_command/static/chat.js
 @@ -2,6 +2,7 @@
@@ -51,7 +51,7 @@ index 7643abc1..2aaee996 100644
 -        h("button", { class: "xc-btn", onclick: closePicker }, "Cancel"));
 +      const picker = createModelPicker({ label: defaults ? "Default model for new threads" : "Main model", selected: model,
 +        applyLabel: defaults ? "Set default" : "Use model",
-+        note: defaults ? "Saves the default for new threads and changes the shared core’s main route. Existing fallbacks remain."
++        note: defaults ? "Saves the default for new threads. Applies to the shared core now or on its next start."
 +          : "Changes the shared core’s main route. Existing fallbacks remain.",
 +        onCancel: closePicker, onApply: async ref => {
 +          if (sid !== current || generation !== pickerGeneration || changingModel) return;
