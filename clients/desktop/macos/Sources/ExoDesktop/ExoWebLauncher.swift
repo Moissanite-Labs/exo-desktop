@@ -5,9 +5,11 @@ import Foundation
 /// The page address carries a token in its fragment. This class keeps that
 /// address in memory only. It never prints it, never logs it, and never
 /// writes it to disk. Error messages name the failure, not the address.
-final class ExoWebLauncher {
+final class ExoWebLauncher: @unchecked Sendable {
     enum LaunchError: Error, CustomStringConvertible {
         case exoNotFound
+        case invalidOverride(String)
+        case launchFailed
         case timedOut
         case exited(Int32)
 
@@ -15,6 +17,10 @@ final class ExoWebLauncher {
             switch self {
             case .exoNotFound:
                 return "No `exo` binary was found on PATH. Install Exo first, or set EXO_DESKTOP_EXO."
+            case .invalidOverride(let path):
+                return "EXO_DESKTOP_EXO points to \(path), which is not executable."
+            case .launchFailed:
+                return "`exo web` could not be started."
             case .timedOut:
                 return "`exo web` did not print a page address within 30 seconds."
             case .exited(let code):
@@ -34,6 +40,12 @@ final class ExoWebLauncher {
     private let lock = NSLock()
 
     func start(completion: @escaping (Result<URL, LaunchError>) -> Void) {
+        if let override = ProcessInfo.processInfo.environment["EXO_DESKTOP_EXO"],
+           !override.isEmpty,
+           !FileManager.default.isExecutableFile(atPath: override) {
+            completion(.failure(.invalidOverride(override)))
+            return
+        }
         guard let exo = findExo() else {
             completion(.failure(.exoNotFound))
             return
@@ -63,6 +75,9 @@ final class ExoWebLauncher {
             guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
             self.lock.lock()
             self.output += text
+            if self.output.count > 8192 {
+                self.output = String(self.output.suffix(8192))
+            }
             let page = self.pageURL(from: self.output)
             self.lock.unlock()
             if let page = page {
@@ -76,19 +91,39 @@ final class ExoWebLauncher {
         do {
             try process.run()
         } catch {
-            finish(with: .failure(.exoNotFound), completion: completion)
+            finish(with: .failure(.launchFailed), completion: completion)
             return
         }
         DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [weak self] in
             guard let self = self else { return }
+            self.lock.lock()
+            let alreadyFinished = self.finished
+            self.lock.unlock()
+            guard !alreadyFinished else { return }
             self.process?.terminate()
             self.finish(with: .failure(.timedOut), completion: completion)
         }
     }
 
-    /// Stops the web server. The core keeps running, as with `exo web`.
-    func stopWebServer() {
-        process?.interrupt()
+    /// Stops the web server, then calls completion. The core keeps running.
+    /// Sends SIGINT, waits up to five seconds, then forces termination.
+    func stopWebServer(completion: @escaping () -> Void) {
+        guard let proc = process else {
+            completion()
+            return
+        }
+        proc.interrupt()
+        DispatchQueue.global().async {
+            let deadline = Date().addingTimeInterval(5)
+            while proc.isRunning && Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.1)
+            }
+            if proc.isRunning {
+                proc.terminate()
+            }
+            proc.waitUntilExit()
+            completion()
+        }
     }
 
     /// Stops the background core. Runs `exo stop` once.
@@ -123,6 +158,7 @@ final class ExoWebLauncher {
             return
         }
         finished = true
+        output = ""
         lock.unlock()
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         errorPipe?.fileHandleForReading.readabilityHandler = nil

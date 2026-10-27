@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         self.webView = webView
 
         buildMenu()
-        launcher.start { [weak self] result in
+        launcher.start { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let url):
@@ -45,9 +45,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // Stops the web server only. The core keeps running, as with `exo web`.
-        launcher.stopWebServer()
-        return .terminateNow
+        // Stops the web server first, then allows termination. The core
+        // keeps running, as with `exo web`.
+        launcher.stopWebServer {
+            DispatchQueue.main.async {
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+        }
+        return .terminateLater
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Closing the window quits the app. Without this, the app would keep
+        // running with no visible window and no way to reopen it.
+        return true
     }
 
     func webView(

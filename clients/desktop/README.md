@@ -18,7 +18,9 @@ The app finds `exo` on PATH, or at the path in `EXO_DESKTOP_EXO`. It runs `exo w
 
 The app reads one page address from `exo web` output. It loads that address in a WebKit view. It never prints that address, never writes it to disk, and never puts it in an argument list.
 
-Closing the window does not stop the core. Quitting the app stops the web server and leaves the core running. The Exo menu has a Stop Core item. It runs `exo stop`.
+Closing the window quits the app. Quitting stops the web server first, waits up to five seconds, then forces it if needed. The core keeps running either way. The Exo menu has a Stop Core item. It runs `exo stop`.
+
+The startup timeout only applies before the page address is found. Once the page loads, the timeout does not touch the server.
 
 ## Security rules
 
@@ -46,7 +48,7 @@ Open `build/ExoDesktop.app`. `exo` must be installed and on PATH first. Run `exo
 
 - A signed and notarized release build.
 - An update path for the app itself.
-- A menu bar mode.
+- A menu bar mode, so closing the window can keep the app running with visible UI.
 - Native approval cards, instead of the web client view.
 - Windows and Linux shells, if the shell approach is kept.
 
