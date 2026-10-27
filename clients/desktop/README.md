@@ -2,6 +2,8 @@
 
 A macOS window for the existing Exo web client. The core, provider login and approval rules remain in Exo.
 
+The [macOS alpha follow-up plan](ALPHA-PLAN.md) tracks packaging, interface state and native controls, with acceptance criteria and current limits.
+
 ## Local alpha install
 
 Needs macOS 13 or later, Xcode command line tools (`swiftc` and `codesign`), and `uv` on PATH. From the repository root:
