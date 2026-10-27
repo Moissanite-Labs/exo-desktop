@@ -56,6 +56,22 @@ def test_register_wires_both_hooks(keyed_store):
     assert set(ctx.hooks) == {"pre_tool_call", "post_approval_response"}
 
 
+def test_internal_error_on_read_tool_fails_closed(keyed_store):
+    # An internal error in the gate's own classification (e.g. a malformed policy
+    # regex) must not silently allow a read tool. It must fall through to an
+    # approval card. Regression for issue 11.
+    store, key = keyed_store
+    g, ctx = make_gate(store, key)
+
+    def _boom(*a, **k):
+        raise RuntimeError("policy regex broken")
+
+    g._pre_tool_call = _boom
+    res = call(ctx, "read_file", {"path": "x"})
+    assert res is not None, "a read tool must not be silently allowed on a gate error"
+    assert res["action"] == "approve"
+
+
 def test_allow_returns_none_and_records(keyed_store):
     store, key = keyed_store
     _, ctx = make_gate(store, key)
