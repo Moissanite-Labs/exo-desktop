@@ -53,11 +53,13 @@ python3 clients/desktop/macos/prepare-web-overlay.py \
   --output /path/to/new-desktop-plugins
 ```
 
-This copies the selected plugins and replaces only `exo-command`'s `server.py` and `service.py`. It leaves the running core and original runtime files untouched. Use it only when those two original files match this branch's base version. Fresh page event streams use the recent event cache; saved transcripts still come from the core. Replay waits for the browser to consume each event so a large history cannot fill the web process's output buffer and freeze the app.
+This copies the selected plugins, replaces `exo-command`'s `server.py` and `service.py`, and includes their required credential HTTP bridge (`credentials.py`). It leaves the running core and original runtime files untouched. Use it only when those two original files match this branch's base version. Fresh page event streams use the recent event cache; saved transcripts still come from the core. Replay waits for the browser to consume each event so a large history cannot fill the web process's output buffer and freeze the app.
 
 Add `--with-model-picker` to also install the searchable chat and Providers pickers. This option checks the supported asset versions and patches chat without replacing runtime-specific commands. Names, providers and full routes can be searched, including punctuation-free queries such as `gpt6`. Use the arrow keys and Enter to select, or Escape to cancel. Typing alone does not change the model.
 
-For separate agent GitHub credentials, see [per-seat GitHub authentication](../../docs/GITHUB-AUTH.md). It needs a core version containing that feature. Updating this web overlay alone does not enable it in an older core.
+Add `--with-credentials` to include the Credentials tab and its guarded UI assets. This checks the original app and stylesheet versions before creating output. It can be combined with `--with-model-picker`. An older core shows that an upgrade is required and receives no secret-bearing setup request. Without this flag, the overlay retains the selected runtime's existing app navigation; the required backend bridge is still included so the web server can import and start.
+
+For separate agent GitHub credentials, see [per-seat GitHub authentication](../../docs/GITHUB-AUTH.md). It needs a core version containing that feature. Updating this web overlay alone does not enable it in an older core. The [Credentials view](../../docs/SECURE-CREDENTIALS.md) adds masked, write-only Keychain setup for upgraded cores and refuses secret submission to older cores. It does not create a GitHub account or activate a staged core.
 
 ## Generic shell build
 
