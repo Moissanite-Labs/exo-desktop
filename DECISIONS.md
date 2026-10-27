@@ -4967,3 +4967,9 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   issue's five rows added to the corpus as tightened pairs.
 - **Docs:** `docs/GATE.md` "Store-path checks", "Secret-store paths", "Search tools", "Change limits",
   `CHANGELOG.md`.
+
+## D-084 (2026-10-27) An internal gate error asks once, and only once
+- **Status:** Accepted 2026-10-27 (PR #23, fail-closed gate errors). Numbered D-084 to avoid colliding with D-083, the core budget decision carried on the alpha stack.
+- **Why:** a classification error used to let read tools through silently, and an error card answered "always" could stand as a grant for later errors.
+- **Decision:** when classification fails, the hook asks with an approval card, including for reads. The card is once-only in every case. A failed classification that still read a store write or secret goes to the principal alone, in every mode. Observe mode still lets non-store actions ahead by design, logged. The safe-on-error read set for side calls is unchanged.
+- **Docs:** `docs/GATE.md` "Who may approve" gains the error-card paragraph.
