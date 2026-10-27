@@ -4,6 +4,12 @@ The current alpha attaches to an existing Exo core and shares its saved sessions
 
 This plan records the 2026-10-27 alpha feedback and source review at `9be0eb22`. The feedback inspected source, the installed bundle and live HTTP endpoints. It did not exercise the GUI. Separate native acceptance confirmed saved threads, a model reply and responsive requests after the replay fix. The separate reported release-build startup race has not been reproduced.
 
+## Pilot additions
+
+- [Searchable model picker](https://github.com/aska-digital/exo-desktop/issues/33): implemented in `facbeb97` and verified in the native alpha. Chat and Providers share name/provider/route search with keyboard selection and cancellation.
+- [Agent GitHub credentials](../../docs/GITHUB-AUTH.md): CLI and core support implemented in `71340dcb`. The running older Canary core still needs an upgrade before its shell tools can use this feature. [Desktop setup](https://github.com/aska-digital/exo-desktop/issues/34) remains planned. The broader identity work is [broader core identity issue](https://github.com/aska-digital/exo/issues/106).
+- [Upstream study](UPSTREAM-STUDY.md): source references, licenses and concrete adoption patterns for the repositories supplied during the pilot. Research does not imply that all candidate features have shipped.
+
 ## 1. Package a stable desktop runtime
 
 Status: planned. Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/31).
