@@ -532,6 +532,14 @@ class Router:
         if self.spend is not None:
             async for event in admitted_stream(self.spend, route.ref, cred.provider, messages, tools,
                                                {**opts, "model": route.model}):
+                if event.kind == "error":
+                    # A spend-gated failure must not be swallowed as success: record it so
+                    # _route runs its fallback/cooldown logic and the credential is cooled,
+                    # instead of treating the refused call as a clean return.
+                    failed.append(event)
+                    self.record_failure(cred.id, route.model, getattr(event, "status", None),
+                                        getattr(event, "retry_after", None), sole,
+                                        error=getattr(event, "error", "") or "", model_only=False)
                 yield event
             return
         started, t0 = False, time.monotonic()
