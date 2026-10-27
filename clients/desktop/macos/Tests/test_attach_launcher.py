@@ -24,6 +24,9 @@ with tempfile.TemporaryDirectory(prefix="desktop fixture ") as tmp:
         proc = subprocess.run([str(wrapper), 'web', '--port', '0', '--no-open'], env=env, capture_output=True, text=True, check=True)
         record = json.loads(proc.stdout)
         assert record == {'args': ['web', '--port', '0', '--no-open', '--socket', str(sockpath)], 'home': str(home), 'seat': 'canary', 'plugins': str(plugins), 'url': None, 'cwd': str(Path.home())}, record
+        # The desktop app pins the loopback port itself; the wrapper must not force an available port,
+        # or the page origin — and the browser storage attached to it — would move on every launch.
+        assert 'EXO_DESKTOP_PORT=0' not in wrapper.read_text(), 'wrapper still forces an available port'
         assert subprocess.run([str(wrapper), 'stop'], capture_output=True).returncode == 64
     sockpath.unlink()
     missing = subprocess.run([str(wrapper), 'web'], capture_output=True)

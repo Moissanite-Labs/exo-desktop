@@ -11,6 +11,7 @@ import { attachApprovals } from "./approvals.js";
 import { getLayout, setLayout, ordered, homeScroll, nearHome, columnOrder, LAYOUTS } from "./layout.js";
 
 import { contextMetrics, mergeTranscript, slashInput, commandUsage, ingressItem } from "./chat_state.js";
+import { readState, writeState, notifyApp, pickThread, scrollFraction, scrollTopFor } from "./desktop_state.js";
 import * as permissions from "./permissions.js";
 
 export function mount(root) {
@@ -20,7 +21,10 @@ export function mount(root) {
   let requested = "", ctxTokens = null, cacheShare = null, ctx = null, findings = null, calls = [], costSeen = false;   // instruments from model.call and usage.updated
   const seen = new Set();   // panels already reported as opened
   const landed = new Set();   // user messages the core has added to a conversation
-  let layout = getLayout();   // "inverse" (box on top, newest first) or "classic"; D-046
+  // The layout the browser saved wins; the desktop app's injected copy is the fallback when the browser
+  // copy is missing, e.g. after the page moved to a new port (see desktop_state.js).
+  const desktopPrefs = (typeof window !== "undefined" && window.__exoDesktopPrefs) || undefined;
+  let layout = getLayout(undefined, desktopPrefs && desktopPrefs.layout);   // "inverse" (box on top, newest first) or "classic"; D-046
 
   const listEl = h("div", { class: "xc-sessions" });
   const logEl = h("div", { class: "xc-log", role: "log", "aria-live": "polite" });
@@ -64,8 +68,18 @@ export function mount(root) {
   }
   function switchLayout(v) {
     if (!LAYOUTS.includes(v)) return;
-    layout = v; setLayout(v); arrange(); drawLog();
+    layout = v; setLayout(v); writeState(undefined, { layout: v }, notifyApp); arrange(); drawLog();
   }
+
+  // The transcript position, saved debounced so a reload or relaunch returns to the same place in the thread.
+  // Only the fraction is saved: the transcript itself is re-read from the core on open, never stored here.
+  let scrollTimer = 0;
+  logEl.addEventListener("scroll", () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      if (current) writeState(undefined, { scroll: scrollFraction(logEl.scrollTop, logEl.scrollHeight, logEl.clientHeight) }, notifyApp);
+    }, 250);
+  }, { passive: true });
   arrange();
   root.replaceChildren(h("div", { class: "xc-chat" },
     h("nav", { class: "xc-chat-left" }, newBtn, h("div", { class: "xc-label" }, "Threads"), listEl, layoutBtn),
@@ -441,9 +455,10 @@ export function mount(root) {
     try { sessions = (await api("GET", "/api/chat/sessions")).sessions; drawSessions(); } catch (e) { fail(e); }
   }
 
-  async function open(id) {
+  async function open(id, opts = {}) {
     modelPicker.hidden = true; ++pickerGeneration;
     modelPicker.replaceChildren();
+    if (id) writeState(undefined, { thread: id }, notifyApp);
     const generation = ++snapshotGeneration, had = Object.keys(steers);
     capacity = null;
     current = id; loading = true; pending = []; items = []; busy = false; cost = null; requested = ""; ctxTokens = null; cacheShare = null; ctx = null; findings = null; calls = []; costSeen = false; flash("");
@@ -460,6 +475,11 @@ export function mount(root) {
     } catch (e) { fail(e); }
     loading = false;
     drawLog(); drawStatus(); loadContext();
+    if (opts.restoreScroll && typeof opts.scroll === "number") {
+      // After drawLog's own frame, which homes the log: the saved position is the point of the restore.
+      const fraction = opts.scroll;
+      requestAnimationFrame(() => { logEl.scrollTop = scrollTopFor(fraction, logEl.scrollHeight, logEl.clientHeight); });
+    }
     const buffered = pending; pending = [];
     buffered.forEach(handle);
     syncApprovals();
@@ -716,7 +736,14 @@ export function mount(root) {
   drawLog(); drawStatus(); drawApprovals(); drawSide();
   const asked = sessionStorage.getItem("xc-open");   // the Tasks page's Open button names a subagent's session (#97)
   sessionStorage.removeItem("xc-open");
-  refreshSessions().then(() => { if (!current && (asked || sessions.length)) open(asked || sessions[0].id); });
+  refreshSessions().then(() => {
+    if (current) return;
+    if (asked) { open(asked); return; }   // an explicit Open from Tasks beats the saved thread
+    const saved = readState(undefined, desktopPrefs);
+    const picked = pickThread(saved.thread, sessions);
+    if (saved.thread && !picked) return;   // saved thread removed: stay on the thread picker, open nothing
+    if (picked) open(picked, { restoreScroll: true, scroll: saved.scroll });
+  });
   return off;
 }
 

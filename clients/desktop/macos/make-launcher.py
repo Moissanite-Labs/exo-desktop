@@ -20,8 +20,9 @@ if attached and not all((a.plugins, a.exo_home, a.seat)):
 script = '''#!/bin/sh
 set -eu
 export PYTHONUNBUFFERED=1
-export EXO_DESKTOP_PORT=0
 unset ANTHROPIC_API_KEY EXO_SEAT EXO_PLUGIN_DIRS EXO_PRINCIPAL EXO_STORE EXO_COMMAND_SOCKET EXO_COMMAND_URL EXO_COMMAND_TOKEN EXO_COMMAND_TOKEN_FILE EXO_TOKEN EXO_KEYS_FILE EXO_PRINCIPAL_STORE EXO_COMMAND_PRINCIPAL_STORE EXO_COMMAND_HOST
+# No EXO_DESKTOP_PORT here: the desktop app pins the loopback port itself (7342 unless overridden),
+# so the page origin — and the browser storage attached to it — stays stable across reloads and relaunches.
 export EXO_COMMAND_HOST=127.0.0.1
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 '''

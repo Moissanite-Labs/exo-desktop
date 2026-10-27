@@ -28,9 +28,9 @@ Bundling Python needs a packaging and signing check. The existing ad hoc source 
 
 ## 2. Preserve interface state
 
-Status: planned. Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/30).
+Status: implemented on this branch, native-app verification still open. Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/30).
 
-The web view uses a nonpersistent store. Reload starts a new web server, and the alpha requests an available port. Browser storage belongs to an origin, so a different port also prevents reuse of saved browser preferences. Enabling a persistent store alone will not resolve this.
+The web view used a nonpersistent store. Reload starts a new web server, and the alpha requested an available port. Browser storage belongs to an origin, so a different port also prevents reuse of saved browser preferences. Enabling a persistent store alone does not resolve this, so this branch does all three: a persistent web view store, a pinned loopback port (7342, `EXO_DESKTOP_PORT` override), and a port-independent copy of the interface preferences in the app's own preferences, injected into the page before its scripts run. Window size and position use the window's frame autosave.
 
 Acceptance:
 

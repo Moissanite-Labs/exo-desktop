@@ -73,8 +73,12 @@ final class ExoWebLauncher: @unchecked Sendable {
         lock.lock()
         startCompletion = completion
         lock.unlock()
+        // Pinned, not requested-available: browser storage belongs to an origin, and an origin includes
+        // its port, so a different port on every launch would strand the page's saved choices even with
+        // a persistent store. 7342 is the desktop default; EXO_DESKTOP_PORT still overrides it, and the
+        // app keeps a port-independent preference copy (see AppDelegate) for launches that do move ports.
         let port = ProcessInfo.processInfo.environment["EXO_DESKTOP_PORT"]
-            .flatMap(Int.init) ?? (exo.lastPathComponent == "exo-alpha" ? 0 : 7342)
+            .flatMap(Int.init) ?? 7342
         let process = Process()
         process.executableURL = exo
         process.arguments = ["web", "--port", "\(port)", "--no-open"]
