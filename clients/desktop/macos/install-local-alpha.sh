@@ -3,9 +3,30 @@
 set -eu
 cd "$(dirname "$0")"
 repo=$(cd ../../.. && pwd)
-command -v uv >/dev/null 2>&1 || { echo 'Install uv first.' >&2; exit 1; }
-# Editable install retains repo-relative exo-command assets; keep this checkout.
-uv sync --project "$repo" --frozen --inexact --extra tui --extra mcp
+attached=false
+socket= exo= plugins= exo_home= seat=
+while [ "$#" -gt 0 ]; do
+  [ "$#" -ge 2 ] || { echo 'Every install flag needs a value.' >&2; exit 64; }
+  case "$1" in
+    --attach-socket) attached=true; socket=$2 ;;
+    --exo) exo=$2 ;;
+    --plugins) plugins=$2 ;;
+    --exo-home) exo_home=$2 ;;
+    --seat) seat=$2 ;;
+    *) echo "Unknown install flag: $1" >&2; exit 64 ;;
+  esac
+  shift 2
+done
+if [ "$attached" = true ]; then
+  [ -n "$exo" ] && [ -x "$exo" ] && [ -S "$socket" ] && [ -n "$exo_home" ] && [ -n "$seat" ] && [ -f "$plugins/exo-command/exo_command/__init__.py" ] || {
+    echo 'Attached mode needs an executable --exo, live --attach-socket, --exo-home, --seat and --plugins containing exo-command.' >&2; exit 64;
+  }
+else
+  [ -z "$exo$plugins$exo_home$seat" ] || { echo 'Runtime flags require --attach-socket.' >&2; exit 64; }
+  command -v uv >/dev/null 2>&1 || { echo 'Install uv first.' >&2; exit 1; }
+  uv sync --project "$repo" --frozen --inexact --extra tui --extra mcp
+  exo="$repo/.venv/bin/exo"
+fi
 ./build-macos-app.sh
 app='build/Exo Desktop Alpha.app'
 mv build/ExoDesktop.app "$app"
@@ -13,30 +34,18 @@ plist="$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleName Exo Desktop Alpha' "$plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.askaconsult.exo-desktop-alpha' "$plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 0.1.0-alpha' "$plist"
-# Quote the source path as a shell literal, including spaces and apostrophes.
-python3 - "$repo" "$app/Contents/Resources/exo-alpha" <<'PY'
-import pathlib, shlex, sys
-repo, target = sys.argv[1:]
-pathlib.Path(target).write_text('''#!/bin/sh
-set -eu
-export PYTHONUNBUFFERED=1
-export EXO_DESKTOP_PORT=0
-unset ANTHROPIC_API_KEY EXO_SEAT EXO_PLUGIN_DIRS EXO_PRINCIPAL EXO_STORE EXO_COMMAND_SOCKET EXO_COMMAND_URL EXO_COMMAND_TOKEN EXO_COMMAND_TOKEN_FILE EXO_TOKEN EXO_KEYS_FILE EXO_PRINCIPAL_STORE EXO_COMMAND_PRINCIPAL_STORE EXO_COMMAND_HOST
-export EXO_COMMAND_HOST=127.0.0.1
-export EXO_HOME="$HOME/Library/Application Support/Exo Desktop Alpha/runtime"
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
-mkdir -p "$EXO_HOME" "$HOME/Library/Application Support/Exo Desktop Alpha/workspace"
-cd "$HOME/Library/Application Support/Exo Desktop Alpha/workspace"
-exec ''' + shlex.quote(repo + '/.venv/bin/exo') + ' "$@"\n')
-PY
-chmod 755 "$app/Contents/Resources/exo-alpha"
+if [ "$attached" = true ]; then
+  /usr/libexec/PlistBuddy -c 'Add :ExoAttachedCore bool true' "$plist"
+  python3 make-launcher.py --output "$app/Contents/Resources/exo-alpha" --exo "$exo" --attach-socket "$socket" --plugins "$plugins" --exo-home "$exo_home" --seat "$seat"
+else
+  python3 make-launcher.py --output "$app/Contents/Resources/exo-alpha" --exo "$exo"
+fi
 codesign --force --sign - "$app"
 codesign --verify --strict "$app"
 mkdir -p "$HOME/Applications"
 dest="$HOME/Applications/Exo Desktop Alpha.app"
 if [ -e "$dest" ]; then
-  old="$dest.previous"
-  [ ! -e "$old" ] || { echo "Remove $old before replacing this alpha." >&2; exit 1; }
+  old="$dest.previous.$(date +%Y%m%d%H%M%S).$$"
   mv "$dest" "$old"
 fi
 cp -R "$app" "$dest"

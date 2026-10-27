@@ -25,6 +25,8 @@ final class ExoWebLauncher: @unchecked Sendable {
             case .timedOut:
                 return "`exo web` did not print a page address within 30 seconds."
             case .exited(let code):
+                if code == 69 { return "The selected core socket is unavailable. Start that core separately, then retry. The desktop will not start a replacement core." }
+                if code == 72 { return "The selected desktop runtime is unavailable. Reinstall the app with a working runtime." }
                 if code == 1 {
                     return "`exo web` exited. Its port may already be in use. Use the page that is already open, or set EXO_DESKTOP_PORT to a free port."
                 }
