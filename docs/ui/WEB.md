@@ -218,8 +218,11 @@ The Providers tab (D-034, demo data) is in `docs/ui/`: `web-providers.png` and `
   Each thread has a Rename button. It opens a labeled title field with Save and Cancel.
   Enter saves and Escape cancels. Double-click also opens this editor (or type `/rename <title>`): `POST /api/chat/sessions/<id>/rename`,
   the core `rename` built-in, principal only (D-069). Renaming another thread does not select it or change the
-  current composer draft. A refused save keeps the title draft and shows the error. The list fetch
-  (`GET /api/chat/sessions`) clamps its `limit` query to 0..500, default 100 (D-085).
+  current composer draft. A refused save keeps the title draft and shows the error. Returning to a thread reads its
+  fresh running status from `GET /api/chat/sessions/<id>` rather than the cached list, so a running turn restores the
+  working indicators and enables Stop. Turn events keep each thread's cached status current, background threads
+  included, and redraw the list only when a listed thread's status changes, so keyboard focus stays on the same
+  thread. The list fetch (`GET /api/chat/sessions`) clamps its `limit` query to 0..500, default 100 (D-085).
 - **Reading position.** Show latest messages appears when the reader moves away from the newest messages.
   It returns to the newest item in either saved layout. Incoming text preserves the reader's position;
   readers already at the newest item continue following it. The transcript is keyboard focusable.

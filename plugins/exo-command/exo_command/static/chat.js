@@ -256,8 +256,7 @@ export function mount(root) {
     // Keep background threads current too: returning to one must not revive a
     // cached "idle" or "live" flag from before its last turn event.
     if (ev.type === "turn.started" || ev.type === "turn.completed") {
-      rememberStatus(ev.session, ev.type === "turn.started" ? "live" : "idle");
-      drawSessions();
+      if (rememberStatus(ev.session, ev.type === "turn.started" ? "live" : "idle")) drawSessions();
     }
     if (!mine) return;
     switch (ev.type) {
@@ -487,11 +486,12 @@ export function mount(root) {
   }
 
   function rememberStatus(id, status) {
-    if (status !== "live" && status !== "idle") return;
+    if (!id || (status !== "live" && status !== "idle")) return false;
     const session = sessions.find(s => s.id === id);
-    if (!session && id !== current) return;
+    const changed = !!session && session.status !== status;
     statusUpdates.set(id, { version: ++statusVersion, status });
     if (session) session.status = status;
+    return changed;
   }
 
   function snapshotBusy(info, fallback) {
