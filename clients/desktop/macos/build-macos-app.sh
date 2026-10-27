@@ -15,12 +15,12 @@ fi
 rm -rf build
 mkdir -p build/ExoDesktop.app/Contents/MacOS
 mkdir -p build/ExoDesktop.app/Contents/Resources
-swiftc -O Sources/ExoDesktop/*.swift \
+MACOSX_DEPLOYMENT_TARGET=13.0 swiftc -O Sources/ExoDesktop/*.swift \
   -o build/ExoDesktop.app/Contents/MacOS/ExoDesktop \
   -framework AppKit -framework WebKit
 cp Info.plist build/ExoDesktop.app/Contents/Info.plist
 if command -v codesign >/dev/null 2>&1; then
-  codesign --force --sign - build/ExoDesktop.app || true
+  codesign --force --sign - build/ExoDesktop.app
 fi
 echo "Built build/ExoDesktop.app"
 echo "Open it with: open build/ExoDesktop.app"
