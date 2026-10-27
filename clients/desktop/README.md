@@ -4,7 +4,7 @@ A macOS window for the existing Exo web client. The core, provider login and app
 
 The [macOS alpha follow-up plan](ALPHA-PLAN.md) tracks packaging, interface state and native controls, with acceptance criteria and current limits.
 
-The [upstream harness study](UPSTREAM-STUDY.md) records concrete patterns from Codex, Hermes, Pi, OpenCode, T3 Code, Command Code and DeepSeek Harness, with source revisions and reuse limits.
+The [upstream harness study](UPSTREAM-STUDY.md) records concrete patterns from Codex, Hermes, Pi, OpenCode, T3 Code, Command Code, DeepSeek Harness and Oh My Pi, with source revisions and reuse limits.
 
 ## Local alpha install
 
