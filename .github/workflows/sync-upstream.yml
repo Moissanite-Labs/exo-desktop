@@ -1,0 +1,36 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    if: github.repository == 'aska-digital/exo-desktop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Merge upstream main
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/aska-digital/exo.git
+          git fetch upstream main
+          git merge --no-edit upstream/main
+          git push origin main
+      - name: Open an issue on conflict
+        if: failure() && steps.merge.outcome == 'failure'
+        run: |
+          gh issue create \
+            --title "Upstream sync needs a manual merge" \
+            --body "The daily upstream sync failed to merge upstream main into fork main. Merge by hand, resolve the conflict, and push. Do not force push main."
+        env:
+          GH_TOKEN: ${{ github.token }}
