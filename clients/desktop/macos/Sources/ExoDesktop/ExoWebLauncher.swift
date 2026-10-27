@@ -37,6 +37,7 @@ final class ExoWebLauncher: @unchecked Sendable {
     private var errorPipe: Pipe?
     private var output = ""
     private var finished = false
+    private var startCompletion: ((Result<URL, LaunchError>) -> Void)?
     private let lock = NSLock()
 
     func start(completion: @escaping (Result<URL, LaunchError>) -> Void) {
@@ -50,6 +51,14 @@ final class ExoWebLauncher: @unchecked Sendable {
             completion(.failure(.exoNotFound))
             return
         }
+        // Stored, not captured: the handlers below run in Sendable contexts,
+        // so they must capture only self (Sendable), never the completion
+        // itself. finish() takes it out under lock and calls it once.
+        // Marking the parameter @Sendable instead would move the same
+        // problem to the caller, which captures the web view.
+        lock.lock()
+        startCompletion = completion
+        lock.unlock()
         let port = ProcessInfo.processInfo.environment["EXO_DESKTOP_PORT"]
             .flatMap(Int.init) ?? 7342
         let process = Process()
@@ -81,17 +90,17 @@ final class ExoWebLauncher: @unchecked Sendable {
             let page = self.pageURL(from: self.output)
             self.lock.unlock()
             if let page = page {
-                self.finish(with: .success(page), completion: completion)
+                self.finish(with: .success(page))
             }
         }
         process.terminationHandler = { [weak self] proc in
             guard let self = self else { return }
-            self.finish(with: .failure(.exited(proc.terminationStatus)), completion: completion)
+            self.finish(with: .failure(.exited(proc.terminationStatus)))
         }
         do {
             try process.run()
         } catch {
-            finish(with: .failure(.launchFailed), completion: completion)
+            finish(with: .failure(.launchFailed))
             return
         }
         DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [weak self] in
@@ -101,33 +110,35 @@ final class ExoWebLauncher: @unchecked Sendable {
             self.lock.unlock()
             guard !alreadyFinished else { return }
             self.process?.terminate()
-            self.finish(with: .failure(.timedOut), completion: completion)
+            self.finish(with: .failure(.timedOut))
         }
     }
 
     /// Stops the web server, then calls completion. The core keeps running.
-    /// Sends SIGINT, waits up to five seconds, then forces termination.
-    func stopWebServer(completion: @escaping () -> Void) {
-        guard let proc = process else {
+    /// Sends SIGINT, waits up to five seconds on a semaphore, then forces
+    /// termination if the server is still running.
+    func stopWebServer(completion: @Sendable @escaping () -> Void) {
+        guard let proc = process, proc.isRunning else {
             completion()
             return
         }
+        let semaphore = DispatchSemaphore(value: 0)
+        proc.terminationHandler = { _ in semaphore.signal() }
+        if !proc.isRunning {
+            semaphore.signal()
+        }
         proc.interrupt()
         DispatchQueue.global().async {
-            let deadline = Date().addingTimeInterval(5)
-            while proc.isRunning && Date() < deadline {
-                Thread.sleep(forTimeInterval: 0.1)
-            }
-            if proc.isRunning {
+            if semaphore.wait(timeout: .now() + 5) == .timedOut, proc.isRunning {
                 proc.terminate()
+                proc.waitUntilExit()
             }
-            proc.waitUntilExit()
             completion()
         }
     }
 
     /// Stops the background core. Runs `exo stop` once.
-    func stopCore(completion: @escaping (Int32) -> Void) {
+    func stopCore(completion: @Sendable @escaping (Int32) -> Void) {
         guard let exo = findExo() else {
             completion(127)
             return
@@ -148,10 +159,7 @@ final class ExoWebLauncher: @unchecked Sendable {
         }
     }
 
-    private func finish(
-        with result: Result<URL, LaunchError>,
-        completion: @escaping (Result<URL, LaunchError>) -> Void
-    ) {
+    private func finish(with result: Result<URL, LaunchError>) {
         lock.lock()
         guard !finished else {
             lock.unlock()
@@ -159,10 +167,12 @@ final class ExoWebLauncher: @unchecked Sendable {
         }
         finished = true
         output = ""
+        let completion = startCompletion
+        startCompletion = nil
         lock.unlock()
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         errorPipe?.fileHandleForReading.readabilityHandler = nil
-        completion(result)
+        completion?(result)
     }
 
     private func pageURL(from text: String) -> URL? {
