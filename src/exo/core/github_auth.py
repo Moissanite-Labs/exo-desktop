@@ -2,6 +2,7 @@
 
 Secrets stay out of metadata, arguments and returned status. Shell access is trusted:
 a command can use or transform its credential; output redaction is not a sandbox.
+Setting up or removing a binding is `exo.github_auth_setup` (outside the core, D-083).
 """
 from __future__ import annotations
 
@@ -10,12 +11,11 @@ import hashlib
 import json
 import os
 import re
-import shutil
 from pathlib import Path
 from typing import Iterable
 
 from exo.core.models import keys
-from exo.core.private import atomic_write, private_dir
+from exo.core.private import private_dir
 
 
 class AuthError(ValueError):
@@ -61,37 +61,6 @@ def binding(home: str | Path, seat: str) -> dict:
         raise AuthError('GitHub authentication store is invalid')
     return data
 
-
-def configure(home: str | Path, seat: str, mode: str, host: str = 'github.com',
-              token: str | None = None, store: str | None = None) -> dict:
-    from exo import providers_setup as ps
-    home, seat, host = _identity(home, seat, host)
-    if mode not in ('token', 'gh-login', 'host'):
-        raise AuthError('Choose token, gh-login or host authentication')
-    old = binding(home, seat)
-    meta = {'mode': mode, 'host': host}
-    if mode == 'token':
-        value = ps.check_key(token or '')
-        keys.remember_secret(value)
-        store = store or ps.default_store()
-        name = account(home, seat, host)
-        if store == 'keychain':
-            ps._keychain_set(name, value)
-        elif store == 'secret-service':
-            ps._secret_tool_set(name, value)
-        elif store == 'file':
-            ps.write_keys_file(name, value)
-        else:
-            raise AuthError('Choose keychain, secret-service or file storage')
-        meta['store'] = store
-    if old.get('mode') == 'token' and (mode != 'token' or old.get('host') != host):
-        _remove_saved_token(home, seat, old)
-    path, ghdir = paths(home, seat)
-    private_dir(path.parent)
-    if mode == 'gh-login':
-        private_dir(ghdir)
-    atomic_write(path, json.dumps(meta) + '\n')
-    return status(home, seat)
 
 
 def _token(home: str | Path, seat: str, meta: dict) -> str | None:
@@ -179,21 +148,3 @@ def child_env(env: dict[str, str], home: str | Path, seat: str,
         out['GH_ENTERPRISE_TOKEN'] = value
     return out
 
-
-def _remove_saved_token(home: str | Path, seat: str, meta: dict) -> None:
-    from exo import providers_setup as ps
-    name = account(home, seat, meta['host'])
-    ps._keychain_delete(name)
-    ps._secret_tool_delete(name)
-    ps.remove_from_keys_file(name)
-
-
-def remove(home: str | Path, seat: str) -> dict:
-    meta = binding(home, seat)
-    if meta and meta['mode'] == 'token':
-        _remove_saved_token(home, seat, meta)
-    path, ghdir = paths(home, seat)
-    shutil.rmtree(ghdir, ignore_errors=True)
-    private_dir(path.parent)
-    atomic_write(path, json.dumps({'mode': 'disabled', 'host': meta.get('host', 'github.com')}) + '\n')
-    return {'seat': seat, 'configured': True, 'mode': 'disabled', 'available': False}
