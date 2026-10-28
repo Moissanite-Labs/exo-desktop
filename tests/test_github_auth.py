@@ -9,7 +9,7 @@ import pytest
 from exo.core import github_auth as auth
 from exo.core.models import keys
 from exo.core.tools.builtin.shell import run_command, tool_env
-from exo import github_auth_cmd
+from exo import github_auth_cmd, github_auth_setup as setup
 
 TOKEN = 'fake-seat-credential-1234567890'
 
@@ -27,7 +27,7 @@ def secrets(monkeypatch, tmp_path):
 
 def test_namespaces_precedence_redaction_and_no_parent_mutation(tmp_path, monkeypatch):
     home = tmp_path / 'one'
-    auth.configure(home, 'alice', 'token', token=TOKEN, store='file')
+    setup.configure(home, 'alice', 'token', token=TOKEN, store='file')
     monkeypatch.setenv('GH_TOKEN', 'fake-host-credential-123456789')
     before = dict(os.environ)
     env = auth.child_env(tool_env(), home, 'alice')
@@ -43,7 +43,7 @@ def test_namespaces_precedence_redaction_and_no_parent_mutation(tmp_path, monkey
 
 
 def test_missing_and_deny_fail_closed(tmp_path):
-    auth.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
+    setup.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
     for pattern in ('GH_*', '*TOKEN', 'GH_CONFIG_DIR', 'GH_HOST'):
         with pytest.raises(auth.AuthError):
             auth.child_env({}, tmp_path, 'alice', deny=[pattern])
@@ -55,20 +55,20 @@ def test_missing_and_deny_fail_closed(tmp_path):
 def test_rotation_remove_and_explicit_host(tmp_path, monkeypatch):
     monkeypatch.setattr('exo.providers_setup._keychain_delete', lambda n: False)
     monkeypatch.setattr('exo.providers_setup._secret_tool_delete', lambda n: False)
-    auth.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
-    auth.configure(tmp_path, 'alice', 'token', token=TOKEN + 'rotated', store='file')
+    setup.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
+    setup.configure(tmp_path, 'alice', 'token', token=TOKEN + 'rotated', store='file')
     assert auth.child_env({}, tmp_path, 'alice')['GH_TOKEN'] == TOKEN + 'rotated'
-    auth.remove(tmp_path, 'alice')
+    setup.remove(tmp_path, 'alice')
     assert auth.status(tmp_path, 'alice')['mode'] == 'disabled'
     with pytest.raises(auth.AuthError):
         auth.child_env({}, tmp_path, 'alice')
     assert keys.file_get(auth.account(tmp_path, 'alice', 'github.com')) is None
-    auth.configure(tmp_path, 'alice', 'host')
+    setup.configure(tmp_path, 'alice', 'host')
     assert auth.child_env({'HOME': '/host'}, tmp_path, 'alice')['HOME'] == '/host'
 
 
 def test_shell_injects_and_redacts_without_argv_token(tmp_path):
-    auth.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
+    setup.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
     code, output, _ = run_command('printf "%s" "$GH_TOKEN"', str(tmp_path), 3,
                                   github_auth=(str(tmp_path), 'alice'))
     assert code == 0 and TOKEN not in output and '[redacted]' in output
@@ -86,17 +86,17 @@ def test_cli_stdin_and_quiet_errors(tmp_path, monkeypatch, capsys):
 
 
 def test_enterprise_and_login_missing_do_not_fallback(tmp_path, monkeypatch):
-    auth.configure(tmp_path, 'alice', 'token', host='git.example', token=TOKEN, store='file')
+    setup.configure(tmp_path, 'alice', 'token', host='git.example', token=TOKEN, store='file')
     env = auth.child_env({'GITHUB_TOKEN': 'host', 'GH_ENTERPRISE_TOKEN': 'host'}, tmp_path, 'alice')
     assert env['GH_ENTERPRISE_TOKEN'] == TOKEN and 'GITHUB_TOKEN' not in env and 'GH_TOKEN' not in env
-    auth.configure(tmp_path, 'bob', 'gh-login')
+    setup.configure(tmp_path, 'bob', 'gh-login')
     monkeypatch.setattr(subprocess, 'run', lambda *a, **kw: subprocess.CompletedProcess(a, 1, '', 'private'))
     with pytest.raises(auth.AuthError):
         auth.child_env({}, tmp_path, 'bob')
 
 
 def test_selected_store_never_uses_shadow_keychain(tmp_path, monkeypatch):
-    auth.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
+    setup.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
     monkeypatch.setattr(keys, 'keychain_get', lambda n: 'stale-secret-1234567890')
     assert auth.child_env({}, tmp_path, 'alice')['GH_TOKEN'] == TOKEN
     Path(os.environ['EXO_KEYS_FILE']).unlink()
@@ -105,7 +105,7 @@ def test_selected_store_never_uses_shadow_keychain(tmp_path, monkeypatch):
 
 
 def test_private_plaintext_login_only_never_calls_gh_or_keychain(tmp_path, monkeypatch):
-    auth.configure(tmp_path, 'alice', 'gh-login')
+    setup.configure(tmp_path, 'alice', 'gh-login')
     _, ghdir = auth.paths(tmp_path, 'alice')
     path = ghdir / 'hosts.yml'
     path.write_text('github.com:\n    oauth_token: ' + TOKEN + '\n')
@@ -132,7 +132,7 @@ def test_gh_login_validates_before_invocation_and_uses_https(tmp_path, monkeypat
     monkeypatch.setattr(subprocess, 'run', fake_run)
     assert github_auth_cmd.main(['login', '--seat', 'alice', '--host', 'invalid/host']) == 1
     assert not calls
-    auth.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
+    setup.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
     assert github_auth_cmd.main(['login', '--seat', 'alice']) == 0
     assert auth.child_env({}, tmp_path, 'alice')['GH_TOKEN'] == TOKEN
     assert (auth.paths(tmp_path, 'alice')[1] / 'hosts.yml').exists()
@@ -160,10 +160,10 @@ def test_bound_job_pump_redacts_split_tokens_before_disk_rotation(tmp_path):
 
 
 def test_malformed_metadata_is_quiet_and_token_mode_excludes_old_login(tmp_path):
-    auth.configure(tmp_path, 'alice', 'gh-login')
+    setup.configure(tmp_path, 'alice', 'gh-login')
     path, ghdir = auth.paths(tmp_path, 'alice')
     (ghdir / 'hosts.yml').write_text('other.example:\n    oauth_token: fake-other-secret\n')
-    auth.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
+    setup.configure(tmp_path, 'alice', 'token', token=TOKEN, store='file')
     env = auth.child_env({}, tmp_path, 'alice')
     assert Path(env['GH_CONFIG_DIR']) == ghdir / 'token'
     assert not (Path(env['GH_CONFIG_DIR']) / 'hosts.yml').exists()

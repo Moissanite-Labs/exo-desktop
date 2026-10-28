@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 
+from exo import github_auth_setup as setup
 from exo.core import github_auth as auth
 from exo.core.models import keys
 from exo.envscrub import scrub_env
@@ -46,7 +47,7 @@ def main(argv=None) -> int:
                 if not a.token_stdin and not sys.stdin.isatty():
                     raise auth.AuthError('Use --token-stdin for noninteractive setup')
                 value = sys.stdin.read(65537) if a.token_stdin else getpass.getpass('GitHub token (hidden): ')
-            result = auth.configure(home, a.seat, a.mode, a.host, value, a.store)
+            result = setup.configure(home, a.seat, a.mode, a.host, value, a.store)
         elif a.action == 'login':
             # Force private on-disk storage; gh's shared OS keychain must not
             # associate this seat's login with a host-machine account.
@@ -59,11 +60,11 @@ def main(argv=None) -> int:
             proc = subprocess.run(['gh', 'auth', 'login', '--hostname', a.host, '--insecure-storage', '--git-protocol', 'https', '--skip-ssh-key'], env=env)
             if proc.returncode:
                 raise auth.AuthError('GitHub login did not complete; existing seat binding was retained')
-            result = auth.configure(home, a.seat, 'gh-login', a.host)
+            result = setup.configure(home, a.seat, 'gh-login', a.host)
         elif a.action == 'status':
             result = auth.status(home, a.seat)
         elif a.action == 'remove':
-            result = auth.remove(home, a.seat)
+            result = setup.remove(home, a.seat)
         else:
             env = auth.child_env(scrub_env(), home, a.seat)
             proc = subprocess.run(['gh', 'api', 'user', '--hostname', auth.binding(home, a.seat).get('host', a.host), '--jq', '.login'], env=env,
