@@ -41,7 +41,7 @@ Acceptance:
 
 ## 3. Add native controls and clear startup status
 
-Status: planned. Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/29).
+Status: implemented on `fix/desktop-native-controls-29` against this branch, pending a native macOS run (no Swift toolchain on the Linux machine that built it). Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/29).
 
 The shell currently provides a standard titled window, an Edit menu and Reload Page. It has no native toolbar, find or zoom commands, app icon, or About item. The version is present in Info.plist. Startup uses a plain text page followed by Retry/Quit on failure.
 

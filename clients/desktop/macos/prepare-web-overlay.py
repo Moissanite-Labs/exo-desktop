@@ -10,6 +10,7 @@ p = argparse.ArgumentParser()
 p.add_argument('--plugins', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--with-model-picker', action='store_true', help='also overlay the searchable picker while preserving runtime-specific chat commands')
+p.add_argument('--with-approval-shortcuts', action='store_true', help='also overlay approval keyboard guidance and focused-card styling')
 a = p.parse_args()
 source = a.plugins.resolve()
 target = a.output.resolve()
@@ -21,6 +22,11 @@ for name, digest in expected.items():
         p.error('selected web implementation differs from the verified replay-fix baseline: ' + name)
 if source in target.parents or target in source.parents:
     p.error('output must be separate from the selected plugins')
+if a.with_approval_shortcuts:
+    approval_assets = {'approvals.js': '4db09306a3ba58cc97c21f193a765bfdd45b4fe776b43b6ab1ffcd1b09b9d621', 'style.css': 'df87e01ebc8f869bde86de7e1c485b10828832d353b397d8b4c2772ec07c6ac3'}
+    for name, digest in approval_assets.items():
+        if hashlib.sha256((source / 'exo-command/exo_command/static' / name).read_bytes()).hexdigest() != digest:
+            p.error('selected web asset differs from the verified approval baseline: ' + name)
 if a.with_model_picker:
     accepted = {'chat.js': ['a8bc3ec5746548d835397fcfb4e1733e5ca6ac81679f907ed9a1f13bd5c69e91', '16c8ce283226807fae222f952da5fea8f62d0e8f525b4c50ecb12fdeff2ddd60'], 'providers.js': ['31bf3bbcb5066d5b1fab1dd23f970a66cbf8ed0d113b0be0fbae728fbf77a2d2'], 'style.css': ['df87e01ebc8f869bde86de7e1c485b10828832d353b397d8b4c2772ec07c6ac3']}
     for name, digests in accepted.items():
@@ -37,5 +43,9 @@ if a.with_model_picker:
     subprocess.run(['patch', '--batch', '--fuzz=0', '-o', str(result), str(assets / 'chat.js')], input=patch.read_bytes(), check=True, stdout=subprocess.DEVNULL)
     result.replace(assets / 'chat.js')
     for name in ('model_picker.js', 'providers.js', 'style.css', 'reasoning.js'):
+        shutil.copy2(patched / 'static' / name, assets / name)
+if a.with_approval_shortcuts:
+    assets = target / 'exo-command/exo_command/static'
+    for name in ('approvals.js', 'style.css'):
         shutil.copy2(patched / 'static' / name, assets / name)
 print('Prepared web replay overlay. Install attached mode with --plugins pointing to the output.')

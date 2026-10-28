@@ -63,6 +63,8 @@ Add `--with-model-picker` to also install the searchable chat and Providers pick
 
 This option also copies the `reasoning.js` dependency used by Providers. The overlay does not upgrade the core. Reasoning controls return an upgrade response when the selected core lacks that capability.
 
+Add `--with-approval-shortcuts` to show the approval keyboard path and highlight the focused card. Press Ctrl+F to focus the first approval, then use its shown keys. Always and deny require Enter. This option checks the original approval script and stylesheet before copying the updated assets. It can be combined with `--with-model-picker`.
+
 For separate agent GitHub credentials, see [per-seat GitHub authentication](../../docs/GITHUB-AUTH.md). It needs a core version containing that feature. Updating this web overlay alone does not enable it in an older core.
 
 ## Generic shell build
@@ -73,6 +75,12 @@ open clients/desktop/macos/build/ExoDesktop.app
 ```
 
 This shell uses external `exo`. `EXO_DESKTOP_EXO` overrides discovery; otherwise a bundled launcher is preferred, then PATH and standard local install locations. `EXO_DESKTOP_PORT` overrides the default port 7342. The generic shell starts in the user's home directory and preserves the usual Exo data configuration. Environment overrides must be passed when starting the executable directly, or through `open --env` on macOS versions supporting it.
+
+## Native controls
+
+The app menu has About Exo, showing the app version, build and the source commit stamped at build time (`ExoSourceCommit` in Info.plist, `unknown` outside a git checkout). The View menu has Zoom In (Command-+), Zoom Out (Command--) and Actual Size (Command-0), applied to the web view. The Edit menu has a Find submenu: Find… (Command-F) opens a native find bar, Find Next (Command-G), Find Previous (Shift-Command-G), Use Selection for Find (Command-E); Enter finds next, Escape closes the bar. The Window menu has Minimize, Zoom Window and Close. The status bar at the bottom of the window shows Starting, Connecting, Ready or Failed; Ready appears only after the page finishes loading, and Connecting first verifies the printed origin actually answers HTTP (a token-free request for the page shell, fragment stripped) — a printed URL alone is never shown as healthy. Startup failure keeps the existing Retry/Quit alert.
+
+The app icon is `Exo` in Info.plist. The source artwork is `macos/Assets/ExoIcon-1024.png`, regenerated with `python3 macos/make-icon-source.py` (standard library only, so it runs on Linux too); the build script converts it to `Exo.icns` with `sips` + `iconutil` on macOS (`macos/make-icon.sh` also runs standalone) and warns instead of failing when those tools are absent.
 
 ## Lifecycle and security
 
