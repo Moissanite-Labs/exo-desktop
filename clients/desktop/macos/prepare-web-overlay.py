@@ -6,7 +6,9 @@ from pathlib import Path
 import shutil
 import subprocess
 
-p = argparse.ArgumentParser()
+# The overlay stylesheet is pinned: the verified runtime style.css plus patches/overlay-style.patch.
+OVERLAY_STYLE = 'cc38bd3af1cd6769b6f0894d7db1dd92a1060e0d2ac2a9c14f8368254431b823'
+p =argparse.ArgumentParser()
 p.add_argument('--plugins', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--with-model-picker', action='store_true', help='also overlay the searchable picker while preserving runtime-specific chat commands')
@@ -42,10 +44,20 @@ if a.with_model_picker:
     result = assets / 'chat.js.patched'
     subprocess.run(['patch', '--batch', '--fuzz=0', '-o', str(result), str(assets / 'chat.js')], input=patch.read_bytes(), check=True, stdout=subprocess.DEVNULL)
     result.replace(assets / 'chat.js')
-    for name in ('model_picker.js', 'providers.js', 'style.css'):
+    for name in ('model_picker.js', 'providers.js'):
         shutil.copy2(patched / 'static' / name, assets / name)
 if a.with_approval_shortcuts:
     assets = target / 'exo-command/exo_command/static'
-    for name in ('approvals.js', 'style.css'):
-        shutil.copy2(patched / 'static' / name, assets / name)
+    shutil.copy2(patched / 'static/approvals.js', assets / 'approvals.js')
+if a.with_model_picker or a.with_approval_shortcuts:
+    # This repo's style.css targets this repo's workspace DOM, not the older runtime's.
+    # Patch the verified runtime stylesheet into the pinned overlay stylesheet instead.
+    assets = target / 'exo-command/exo_command/static'
+    patch = Path(__file__).resolve().parent / 'patches/overlay-style.patch'
+    result = assets / 'style.css.patched'
+    subprocess.run(['patch', '--batch', '--fuzz=0', '-o', str(result), str(assets / 'style.css')], input=patch.read_bytes(), check=True, stdout=subprocess.DEVNULL)
+    if hashlib.sha256(result.read_bytes()).hexdigest() != OVERLAY_STYLE:
+        shutil.rmtree(target)
+        p.error('patched overlay stylesheet differs from the pinned overlay stylesheet')
+    result.replace(assets / 'style.css')
 print('Prepared web replay overlay. Install attached mode with --plugins pointing to the output.')

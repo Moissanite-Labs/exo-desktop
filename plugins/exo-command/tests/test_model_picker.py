@@ -141,6 +141,21 @@ def test_chat_search_preserves_thread_and_default_routes_and_returns_focus(page,
     page.wait('document.activeElement.classList.contains("xc-input")')
 
 
+def test_chat_picker_stays_one_column_inside_the_grid_composer(page):
+    mount_view(page, 'chat')
+    page.wait('document.querySelectorAll(".xc-sess").length === 2')
+    command(page, '/model')
+    page.wait('!!document.querySelector("[role=combobox]") && document.querySelectorAll("[role=option]").length > 0')
+    layout = page.eval('''(()=>{
+      const picker=document.querySelector('.xc-composer .xc-search-model-picker');
+      const box=e=>e.getBoundingClientRect();
+      const field=box(picker.querySelector('[role=combobox]')), row=box(picker.querySelector(':scope > .xc-btnrow'));
+      return {width:innerWidth, columns:getComputedStyle(picker).gridTemplateColumns.trim().split(/\\s+/).length,
+              sameLeft:Math.abs(field.left-row.left)<1, rowBelow:row.top>=field.bottom};
+    })()''')
+    assert layout == {'width': 1440, 'columns': 1, 'sameLeft': True, 'rowBelow': True}
+
+
 def test_chat_escape_and_old_picker_cannot_change_new_thread(page):
     mount_view(page, 'chat')
     page.wait('document.querySelectorAll(".xc-sess").length === 2')

@@ -59,6 +59,8 @@ Add `--with-model-picker` to also install the searchable chat and Providers pick
 
 Add `--with-approval-shortcuts` to show the approval keyboard path and highlight the focused card. Press Ctrl+F to focus the first approval, then use its shown keys. Always and deny require Enter. This option checks the original approval script and stylesheet before copying the updated assets. It can be combined with `--with-model-picker`.
 
+Both options leave this branch's `style.css` out of the overlay. It is written for this branch's redesigned workspace page, not for the older runtime page. They instead apply `macos/patches/overlay-style.patch` to the checked runtime stylesheet and confirm that the result matches the pinned overlay stylesheet. To check this against the verified runtime, run `python3 clients/desktop/macos/Tests/test_web_overlay.py`. It needs this checkout's git history.
+
 For separate agent GitHub credentials, see [per-seat GitHub authentication](../../docs/GITHUB-AUTH.md). It needs a core version containing that feature. Updating this web overlay alone does not enable it in an older core.
 
 ## Generic shell build
