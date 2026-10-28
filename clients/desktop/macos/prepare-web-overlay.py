@@ -34,7 +34,7 @@ if a.with_model_picker:
             p.error('selected web asset differs from the verified picker baseline: ' + name)
 shutil.copytree(source, target, ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '.git'))
 patched = Path(__file__).resolve().parents[3] / 'plugins/exo-command/exo_command'
-for name in ('server.py', 'service.py'):
+for name in ('server.py', 'service.py', 'reasoning.py'):
     shutil.copy2(patched / name, target / 'exo-command/exo_command' / name)
 if a.with_model_picker:
     assets = target / 'exo-command/exo_command/static'
@@ -42,7 +42,7 @@ if a.with_model_picker:
     result = assets / 'chat.js.patched'
     subprocess.run(['patch', '--batch', '--fuzz=0', '-o', str(result), str(assets / 'chat.js')], input=patch.read_bytes(), check=True, stdout=subprocess.DEVNULL)
     result.replace(assets / 'chat.js')
-    for name in ('model_picker.js', 'providers.js', 'style.css'):
+    for name in ('model_picker.js', 'providers.js', 'style.css', 'reasoning.js'):
         shutil.copy2(patched / 'static' / name, assets / name)
 if a.with_approval_shortcuts:
     assets = target / 'exo-command/exo_command/static'
