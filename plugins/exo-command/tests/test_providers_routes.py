@@ -16,6 +16,7 @@ from exo import providers_setup as ps
 from exo.core.models import keys
 from exo.core.models.router import Router
 from exo.protocol import schema as s
+from exo.server.engine import CommandFailed
 from exo_command import providers as prov
 from exo_command.config import load_settings
 from exo_command.server import WebServer
@@ -210,7 +211,6 @@ def test_add_test_remove_and_default_with_every_check_passing(caplog, capsys):
 @pytest.mark.parametrize("denied", [s.ModelsSet, s.ConfigSet])
 def test_default_never_falls_back_after_core_refuses_authority(denied):
     from exo.config import Config
-    from exo.server.engine import CommandFailed
     cfg = Config.load()
     cfg.set("models.roles.main", ["anthropic:claude-opus-5-5"])
     cfg.save()
@@ -256,6 +256,44 @@ def test_default_falls_back_to_config_when_the_core_is_down():
         return await raw(port, "POST", "/api/providers/default", ok_headers(port), {"ref": "openai:gpt-5"})
     status, data, _ = serve(go, Down())
     assert status == 200 and data["applied"] == "next start" and data["routes"][0] == "openai:gpt-5"
+
+
+@pytest.mark.parametrize("failure, kind, retryable", [
+    (ConnectionError("core down"), "transport", True),
+    (CommandFailed("forbidden", "only the principal may list models"), "authority", False),
+    (RuntimeError("the core failed to list models"), "other", False),
+])
+def test_models_read_failure_names_its_kind_and_whether_a_retry_can_help(failure, kind, retryable):
+    """D-091: a failed model list keeps the route's shape, so the picker still renders, and adds the class of
+    failure. Only a transport failure is retryable; retrying a refusal changes nothing."""
+    class Failing(Src):
+        async def call(self, body):
+            if isinstance(body, s.ModelsList):
+                raise failure
+            return await super().call(body)
+
+    async def go(web, port):
+        return await raw(port, "GET", "/api/providers/models", ok_headers(port))
+    status, data, _ = serve(go, Failing())
+    assert status == 200
+    assert data["models"] == [] and data["available"] == []
+    assert data["error_class"] == kind and data["retryable"] is retryable
+    assert data["error"] and "ConnectError" not in data["error"] and "forbidden" not in data["error"]
+    assert len(data["error"]) <= 300
+
+
+def test_models_read_failure_never_carries_a_key_value():
+    class Leaky(Src):
+        async def call(self, body):
+            if isinstance(body, s.ModelsList):
+                raise RuntimeError("refused with key {}".format(FAKE))
+            return await super().call(body)
+
+    async def go(web, port):
+        return await raw(port, "GET", "/api/providers/models", ok_headers(port))
+    status, data, text = serve(go, Leaky())
+    assert status == 200 and data["error_class"] == "other"
+    assert FAKE not in text and "[redacted]" in data["error"]
 
 
 def test_page_url_carries_the_token_in_the_fragment_only():

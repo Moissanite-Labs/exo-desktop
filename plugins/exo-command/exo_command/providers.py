@@ -27,6 +27,7 @@ from urllib.parse import urlsplit
 from exo import providers_setup as ps
 from exo.core.models.keys import redact_secrets
 from exo.protocol import schema as s
+from .source import core_failure
 
 TOKEN_HEADER = "x-exo-token"
 LOOPBACK_NAMES = ("127.0.0.1", "localhost", "::1")
@@ -113,7 +114,12 @@ async def handle(centre, method: str, path: str, body: Dict[str, Any],
             try:
                 res = await centre.source.call(s.ModelsList())
             except Exception as e:
-                return 200, {"models": [], "available": [], "error": "core unreachable ({})".format(type(e).__name__)}
+                # D-091: the picker keeps its shape (200, lists present) and adds a named failure, so the page can
+                # say which kind it was and offer a retry only where retrying can help. The sentence is redacted
+                # and length-capped: it reaches a browser, and a key value must never follow it there.
+                kind, why = core_failure(e)
+                return 200, {"models": [], "available": [], "error": redact_secrets(why)[:300],
+                             "error_class": kind, "retryable": kind == "transport"}
             return 200, {"models": res.get("models") or [], "available": res.get("available") or []}
         if parts == ["default"] and method == "POST":
             return 200, await _default(centre, body, router_factory)

@@ -37,17 +37,41 @@ export function mount(root) {
   }
 
   const results = {};   // provider name -> {text, cls}; kept across redraws, never holds a key
-  let data = null, models = null, err = "", picked = "", modelsError = "", savingDefault = false, loadGeneration = 0;
+  let data = null, models = null, modelsError = null, err = "", picked = "", savingDefault = false, loadGeneration = 0;
+
+  // D-091: a failed model list says which failure it was. A transport failure can be retried; an authority
+  // refusal cannot, so it gets no button. A failed read keeps the last good list, so the picker stays usable.
+  // A read a newer one superseded is dropped, so a slow first answer cannot overwrite a newer list.
+  async function loadModels(generation) {
+    let nextModels = models, nextError = null;
+    try {
+      const d = await api("GET", "/api/providers/models");
+      if (d && d.error) nextError = { text: d.error, cls: d.error_class || "other", retryable: d.retryable !== false };
+      else nextModels = d;
+    } catch (e) {
+      nextError = { text: e.message || "The model list could not be read.", cls: "other", retryable: true };
+    }
+    if (!alive || generation !== loadGeneration) return;
+    models = nextModels; modelsError = nextError;
+  }
 
   async function load() {
     const generation = ++loadGeneration;
+    let read = false;
     try {
       const next = await api("GET", "/api/providers");
-      let nextModels = null, nextError = "";
-      try { nextModels = await api("GET", "/api/providers/models"); } catch (e) { nextError = e.message || "Models could not be loaded."; }
       if (!alive || generation !== loadGeneration) return;
-      data = next; models = nextModels; modelsError = nextError; err = "";
+      data = next; err = ""; read = true;
     } catch (e) { if (generation === loadGeneration) err = e.message; }
+    if (read) await loadModels(generation);
+    if (alive && generation === loadGeneration) draw();
+  }
+
+  async function retryModels() {
+    const generation = ++loadGeneration;
+    modelsError = null;   // the list stays while the retry runs, so the picker does not empty out
+    if (alive) draw();
+    await loadModels(generation);
     if (alive && generation === loadGeneration) draw();
   }
 
@@ -129,11 +153,17 @@ export function mount(root) {
 
   function picker() {
     const rows = [...((models && models.models) || []), ...((models && models.available) || [])];
-    const chosen = createModelPicker({ label: "Default model", rows: modelsError ? [] : rows, selected: picked,
+    const chosen = createModelPicker({ label: "Default model", rows: modelsError && !rows.length ? [] : rows, selected: picked,
       applyLabel: "Save default", note: "The route the main role calls first.", onApply: saveDefault });
-    if (modelsError) chosen.setError(modelsError + " Reopen Providers to retry.");
+    // With nothing to pick from, the reason goes where the list would be; otherwise it rides above the list it kept.
+    if (modelsError && !rows.length) chosen.setError(modelsError.text +
+      (modelsError.retryable ? "" : " Reopen this tab after the core restarts."));
+    const retry = modelsError && modelsError.retryable ? h("div", { class: "xc-prov-def-act" },
+      h("button", { class: "xc-btn", type: "button", onclick: retryModels }, "Try again")) : null;
     const res = results._default;
     return h("section", { class: "xc-prov-def", "aria-label": "Default model" }, chosen.element,
+      modelsError && rows.length ? h("div", { class: "xc-warn", role: "status" }, modelsError.text + " This list is from the last good read.") : null,
+      retry,
       res ? h("div", { class: "xc-prov-res " + (res.cls || ""), role: "status" }, res.text) : null);
   }
 
