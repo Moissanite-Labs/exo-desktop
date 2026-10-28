@@ -6,6 +6,21 @@ labels, `·` as the separator, orange only for the one thing that matters, cold 
 Presentation only: no protocol change, the JS behaviour is the same, no build step, no new dependency, no font
 or file from outside.
 
+## Conversation drafts and unconfirmed sends (D-045)
+
+Each conversation keeps its own unsent text and selection while the page is open. Switching threads or
+visiting another web view restores that conversation's draft. New thread starts with its own composer;
+returning to the source conversation restores its draft. The initial composer belongs to the conversation
+created by its first submission. Drafts live only in JavaScript memory, never browser storage or the core.
+Reloading or closing the page discards them.
+
+While a submission is pending, Send says “Sending…” and repeated Enter does not submit it twice. You can
+keep drafting or visit another conversation. If the reply fails, the original text returns to an unchanged
+empty composer. If you wrote something newer, “Restore text” adds the failed text ahead of that newer
+draft when you choose it. Recovery stays with the originating conversation, including through view changes.
+Check the transcript before sending again: an unconfirmed reply may have reached the core. Nothing retries
+automatically. “Dismiss” removes the recovery notice; it does not erase the current draft.
+
 ## Connecting to the core (D-036)
 
 `exo web` needs one core for the agent. It looks for `$EXO_HOME/run/exod.sock` (`exo serve`), then
@@ -78,6 +93,13 @@ same-origin or none. Besides the launch route, only the page shell (`/`, `/stati
 Responses carry `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff` and the Content-Security-Policy
 below.
 
+`POST /api/approvals/<id>` takes a JSON object with `decision` (`allow`, `deny` or `allow_always`) and an optional
+`note`. An array, null or scalar gets 400 with `{"error": "body must be a json object"}` before any approval answer
+reaches the core; malformed JSON keeps its 400 `{"error": "bad json"}` response (#740).
+JSON deeper than the decoder supports gets that same approval error. The shared body reader used by chat and
+provider POSTs rejects such input with its existing 400 `{"error": "body must be a json object"}` response
+(follow-up to #751).
+
 The web process answers approvals as the principal: on each connection it checks with the kernel that the socket
 is served by the core named in its launch record (`run/<socket>.principal.key`), then sends that record's
 credential on that connection (D-060, `docs/GATE.md` "Unix peer authentication"). It re-joins a core that restarted
@@ -129,11 +151,13 @@ The Providers tab (D-034, demo data) is in `docs/ui/`: `web-providers.png` and `
 
 - **Brand bar.** `E X O`, the agent and thread, the tabs, the connection led. The square dot before `E X O`
   pulses orange while a turn runs and is hollow when idle.
-- **Status strip** (one line, hairline above): state, served model (and `← fallback` in orange when the route
+- **Status strip** (wrapping instruments, hairline above): state, served model (and `← fallback` in orange when the route
   that served differs from the one asked, from `model.call`), memory gauge (tokens the last call carried, bar
   against the reported model capacity; an unknown capacity stays unknown, from `usage.updated` and structured
   `/context` reports), cache share of that call, session cost. While busy a
   packet travels along a dashed wire at the end of the strip. Findings are the open count from `/findings count`.
+  Instruments wrap within the available conversation width; model names and values remain readable. Notices
+  occupy a full row and wrap, including long unbroken text, in both classic and inverse layouts.
 - **Transcript.** `›` prompt in orange, agent text in fg-2, one dim line per tool (name, short args, elapsed; click
   to open the arguments and output; a small wire runs while it works), `memory · log 1-16 folded · 1781 → 153 tok`
   and `context · compacted` lines in dim with a cold label, `tip:` lines in dim italic (a `notice` that starts with
@@ -152,7 +176,9 @@ The Providers tab (D-034, demo data) is in `docs/ui/`: `web-providers.png` and `
   memory column.
 - **Panels.** A thin outline with a 3px left rule. Approval is orange (`APPROVAL · HIGH RISK`) with key chips
   `[o] once [a] always [d] deny`; Tab, click or Ctrl+F deliberately focuses a card, and cards never claim focus
-  automatically. Shortcuts act only within that card, never in editable fields. Always (including uppercase A,
+  automatically. Each card shows the answer sequence for its available options and says "Ctrl+F to focus the first
+  approval". The help changes during always confirmation and deny-note entry. A deliberately focused card has an
+  accent outline. Shortcuts act only within that card, never in editable fields. Always (including uppercase A,
   a focused button shortcut, or clicking Always) requires a separate Enter or Confirm always button; Escape,
   another key, Cancel, or leaving the card cancels confirmation. Deny opens an optional note. The page reconciles
   its cards with the server's list on every thread open and stream reconnect, and the server asks the core first,
@@ -170,9 +196,11 @@ The Providers tab (D-034, demo data) is in `docs/ui/`: `web-providers.png` and `
   (`POST /api/chat/sessions/<id>/unsteer`, D-045). The chip goes when the message lands or another window cancels it,
   not when the turn ends: a steer that arrives while a turn is finishing starts the next turn (#147). Reopening the
   thread drops a chip the core no longer queues (`GET /api/chat/sessions/<id>` lists the queued ids as `steers`).
-- **Thread list.** Double-click a thread to rename it (or type `/rename <title>`): `POST /api/chat/sessions/<id>/rename`,
-  the core `rename` built-in, principal only (D-069). The list fetch (`GET /api/chat/sessions`) takes a `limit`
-  query value clamped to 0..500, default 100 (D-085).
+- **Thread list.** Each thread has a visible Rename button. It opens a labeled title field with Save and Cancel.
+  Enter saves and Escape cancels. Double-click also opens this editor (or type `/rename <title>`): `POST /api/chat/sessions/<id>/rename`,
+  the core `rename` built-in, principal only (D-069). Renaming another thread does not select it or change the
+  current composer draft. A refused save keeps the title draft and shows the error. The list fetch
+  (`GET /api/chat/sessions`) clamps its `limit` query to 0..500, default 100 (D-085).
 - **Event stream.** `bus.js` reopens the stream itself from the last seq when the browser gives up (EventSource never
   retries after an HTTP error such as a 403 after a restart or a 502 while the core restarts), ignores a seq it has
   already handled, and the server resumes from the later of `?since=` and `Last-Event-ID`. Before D-045 a drop replayed
@@ -345,3 +373,12 @@ The Providers shots use a stub `/api/providers` table with demo names (no real s
 `Google Chrome --headless=old --screenshot` against a `WebServer` over a fake source at `/?boot=0#providers&token=demo`.
 
 Source of the language: the Exo site, `site/`.
+
+### Chat notice ownership
+
+The chat status strip shows notices for the selected session only. Unscoped notices do not replace its
+status. Model retry and fallback notices carry `source: model_route` and a `call_id` matching the
+`model.call` record. A successful matching call clears that transient warning; another call cannot.
+Turn completion clears any remaining route warning, while newer general notices and command errors
+remain visible. Attempt details remain in the model-call records. Older cores without these fields retain
+notices until another status message or thread selection replaces them.
