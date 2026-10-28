@@ -5211,6 +5211,12 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
 - **Docs:** `docs/ENGINE-SPLIT.md` "Budget policy", `docs/DEVELOPER-GUIDE.md` §7, `docs/WHITEPAPER.md` §27,
   `docs/DOCS-MAP.md`, `CHANGELOG.md`.
 
+## D-084 (2026-10-27) An internal gate error asks once, and only once
+- **Status:** Accepted 2026-10-27 (ported from exo-desktop #23, fail-closed gate errors).
+- **Why:** a classification error used to let read tools through silently, and an error card answered "always" could stand as a grant for later errors.
+- **Decision:** when classification fails, the hook asks with an approval card, including for reads. The card is once-only in every case. A failed classification that still read a store write or a secret goes to the principal alone, in every mode. Observe mode still lets non-store actions ahead by design, logged. The safe-on-error read set for side calls is unchanged.
+- **Docs:** `docs/GATE.md` "Who may approve" gains the error-card paragraph.
+
 ## D-088 (2026-10-27) Per-seat GitHub auth carries the core line budget over the ceiling (issue #51 exception)
 - **Status:** Accepted 2026-10-27 in the fork as D-083 (exo-desktop #22). Renumbered D-088 in the exo sync (exo-desktop #77), because exo's D-083 is the principal's no-ceiling ruling. **Superseded by D-083:** with no line ceiling there is no `CORE_HEADROOM` to raise, so this entry changes nothing today. The structural caps (39 inward imports, 8 private-state reads) still apply.
 - **Why:** the #22 stack counts 16,066 core lines, 242 over the 15,824 ceiling, and main itself is already 15 over. The budget policy (D-077) says a feature that crosses the ceiling waits for a reduction or carries a recorded decision. This entry is that decision.
