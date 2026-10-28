@@ -288,6 +288,11 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   (terms); Perplexity's 27B open model as the shipped default (needs about 49 GB of GPU memory, no device path).
 
 ## D-016 (2026-10-12) Agent wire: SYM-2P lines for machines, English for models and people
+- **Amendment 2026-10-27 (exo-desktop #5 and #17, ported in #674):** `exo.wire.verify(line, sig, trusted_pub)`
+  checks a detached signature only against the key the caller pins, and returns False when none is given. Before,
+  it fell back to the `pub` the signature carries. Whoever made the packet chose that key, so any packet signed by
+  any key passed. No production caller used that path, and `delegate`'s receipt test already pinned the key. A
+  caller with no pinned key for the signer cannot verify a line. Docs: `docs/AGENT-WIRE.md` §4.2.
 - **A's ask:** "project exo should integrate this tech, or a better implementation of its concept, in its
   backend systems for interagent communcation, delegation, and wherever else appropriate/relevant"
   (aska-digital/protean-sym2p).
@@ -556,6 +561,7 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
 - **Not done:** web client view, receipts for bus sends, held messages across restarts, live gateway test.
 
 ## D-028 (2026-10-12) One agent, one continuous memory
+- *Amendment 2026-10-28 (#450):* fork copies retain a derived indexed original position. Context lookups no longer parse each copy JSON; the one-time backfill leaves signed data and log hashes untouched.
 - **Why (A, verbatim):** "well if the harness is built according to my vision for the implemenation of the optchat
   memory system all sessions should technically be the same agent with continuous memory". Exo had taken the turn
   model (D-013) but kept sessions: a summary tree per session, `/new` as a blank mind, exo-memory's daily log as a
@@ -675,6 +681,13 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
 - **Not done:** the web client has no tips; upgraders without the marker see the intro once (pass `--no-intro`).
 
 ## D-031 (2026-10-12) UI/UX overhaul, terminal half: make the TUI look like the site's terminal figure
+- **Web amendment, 2026-10-28:** at the principal's request, the shared web workspace keeps the angular
+  identity while using readable sans serif conversation text, restrained surfaces and explicit attention
+  states. Dark remains the default; Light and System are saved presentation choices. Persistent navigation
+  supports browser history and keyboard access. Loaded-conversation search, status filters and Show latest
+  messages use existing records and preserve drafts. The web boot overlay is removed. This changes no
+  model, permission, storage or execution policy; desktop consumes the shared implementation under D-089.
+  Current behavior is documented in `docs/ui/WEB.md` and `docs/USER-GUIDE.md`.
 - **Why (A, verbatim):** "UI/UX needs an overhaul. the project website at exo.askaconsult.com gives such a
   futuristic feeling - our ui/ux should be deliver on it".
 - **Decision:** the language already exists on the site (`figure.term`, `style.css`), so the TUI takes it
@@ -1131,6 +1144,17 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   printed by `exo models` and sent to `/providers` and the web. Invalid URLs produce a generic label without
   repeating the input. Actual connections and probes keep the configured endpoint. Paths, queries and fragments
   are not secret-scrubbed by this display helper. No command, key, setting or setup step changes.
+- **Amendment 2026-10-27 (#691, fixed in #728, exo-desktop #16, PR #674):** `exo config show`, `exo config get`
+  and `config.get` mask the same values, and those are the values `config.set` refuses. Before exo-desktop #16 the
+  two commands printed raw values. `config.get` judged a dotted key by its last part only, so a container under
+  `token` and every literal under `headers` printed in full. Now `redact` takes the whole key path, and it and the
+  `config.set` refusal share one test, `_is_secret`. A string is a secret when it is shaped like a key, even beside
+  a `${VAR}`, or when it is a literal (not `${VAR}`) under `env`, `headers` or a secret-shaped name at any level. So
+  `{"token": {"a": "x"}}` is refused and masked, and a header literal in a file written by hand is masked. One test
+  for both means the commands never print a value `config.set` would refuse. Cost: a container whose own name looks
+  like a secret, such as an MCP server named `github-token`, is masked whole and cannot be set with literals.
+  Rejected: judging only the last part of the key, which still printed a container under `token` and every literal
+  under `headers`. No command or key changes.
 - **Why:** a new user had no clean way to add a model key. Keys went in by hand (env, `security`, or a 0600
   file), `exo models` only reported, and the web client had no provider settings at all.
 - **Engine:** `exo/providers_setup.py`. `rows` gives every catalog provider with status (key found and where,
@@ -4728,7 +4752,13 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   and their controls, under the default policies and four aimed `gates.yaml` files, in enforce and observe mode,
   with and without bypass, at no, high and low registry risk, gives 1360 lines on main e0968a2b and here: 164 change,
   each to an ask or to a bypass row that records the ask, and none runs here that main asks about or blocks.
-  `gate_diff` sees neither check (both are past `decide`).
+  `gate_diff` sees neither check (both are past `decide`). *2026-10-27, review 5675164403 of #703:* the rows above
+  are not the only ones. The floor reads each part too, so a snake shell call whose own folder argument is a secret
+  folder (#311) also asks once in bypass. Its line keeps its own category (`read` for `cat` and `ls`), and the store
+  read is a `credentials` part. `terminal`, `bash` and `exec_command` running `cat config` with `workdir` `~/.kube`,
+  and `bash` running `ls` with `cwd` `~/.exo/keys`, `~/.aws` or `~/.claude`, ran in bypass on main 58503282. They
+  ask once since #703, in enforce and observe mode, with `bypass.floor` `credentials`. `cat ~/.kube/config` asked
+  before too, and a shell call in an ordinary folder decides as before. This decision wants that: secrets still ask.
 - **Numbering:** D-057 to D-061 are on main or open PRs, D-062 and D-063 on local exosphere branches, and one more
   is held by `fix/update-and-rounds`, so this is D-065.
 - **Docs:** `docs/GATE.md` "Bypass mode (D-065)", `docs/USER-GUIDE.md` §3 and §6, `docs/COMMANDS.md`,
