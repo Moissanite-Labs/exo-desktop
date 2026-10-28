@@ -1,4 +1,4 @@
-name: Sync upstream
+name: Prepare upstream sync draft
 
 on:
   schedule:
@@ -6,31 +6,38 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
+
+concurrency:
+  group: exo-desktop-upstream-sync
+  cancel-in-progress: false
 
 jobs:
   sync:
-    if: github.repository == 'aska-digital/exo-desktop'
+    if: github.repository == 'aska-digital/exo-desktop' && (github.event_name == 'workflow_dispatch' || vars.EXO_SYNC_ENABLED == 'true')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Merge upstream main
-        id: merge
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/aska-digital/exo.git
-          git fetch upstream main
-          git merge --no-edit upstream/main
-          git push origin main
-      - name: Open an issue on conflict
-        if: failure() && steps.merge.outcome == 'failure'
-        run: |
-          gh issue create \
-            --title "Upstream sync needs a manual merge" \
-            --body "The daily upstream sync failed to merge upstream main into fork main. Merge by hand, resolve the conflict, and push. Do not force push main."
+      - name: Require an owner-provided sync credential
         env:
-          GH_TOKEN: ${{ github.token }}
+          EXO_SYNC_TOKEN: ${{ secrets.EXO_SYNC_TOKEN }}
+        run: |
+          if [ -z "$EXO_SYNC_TOKEN" ]; then
+            echo '::error::EXO_SYNC_TOKEN is missing. See CONTINUITY.md. No sync was attempted.'
+            exit 1
+          fi
+      - name: Read trusted fork main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.EXO_SYNC_TOKEN }}
+          persist-credentials: false
+          clean: false
+      - name: Prepare or update the draft sync PR
+        env:
+          EXO_SYNC_TOKEN: ${{ secrets.EXO_SYNC_TOKEN }}
+        run: >-
+          python3 scripts/sync_upstream.py
+          --work-dir "$RUNNER_TEMP/exo-sync-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          --report-failures

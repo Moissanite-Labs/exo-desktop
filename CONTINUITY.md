@@ -1,29 +1,51 @@
-# Continuity between exo and exo-desktop
+# Exo desktop continuity
 
-Exo is the core. Exo-desktop is a fork that adds a desktop client. This file states how the two stay in step, so drift is caught in hours, not in dozens of commits.
+The [2026-10-28 decision](https://github.com/aska-digital/exo/discussions/746) makes Exo the shared implementation home. Its workflow document is pending in [Exo PR #747](https://github.com/aska-digital/exo/pull/747).
 
-## The one rule, and its current exception
+Use the [reviewed policy text](https://github.com/aska-digital/exo/blob/a856b3b7ddc22505f22fec55b9d87692ddc30bad/docs/REPOSITORY-WORKFLOW.md) until that PR merges.
 
-Exo-desktop edits only `clients/desktop`. It never edits `src/`, plugins, docs, or tests for the core. Upstream changes and desktop changes then touch different files, and a sync cannot conflict on content.
+The permanent target is [canonical Exo's workflow document](https://github.com/aska-digital/exo/blob/main/docs/REPOSITORY-WORKFLOW.md). This file covers fork operations, not a second feature policy.
 
-Exception, decided 2026-10-27 (issue #51): while the project is early, in stealth, with no external users, shipping speed comes first. The fork may edit core `src/`, plugins, docs, and tests when the desktop requires it. This exception is open-ended for now and covers the macOS alpha stack, audit fixes that touch core code, and core rework such as the gate change. As the project grows and external users start contributing to the repos, this setup will need to be more consolidated, with more structured rules, and the exception will be revisited and the setup adapted to whatever the circumstances require at that point.
+Native shell and packaging work belongs under `clients/desktop`. Fork maintenance exceptions are this file, the local `AGENTS.md` pointer, the sync workflow, `scripts/sync_upstream.py` and its tests. Shared runtime and web work has one canonical Exo PR.
 
-## Sync
+Temporary alpha carries must name their canonical owner, PR, exact source version and reconciliation step. Existing paired PRs transition with their authors. Retain review evidence and unique native work. Do not overwrite another author's branch or close their work without coordination and verified downstream integration.
 
-Sync the fork at the start of every work session. The daily workflow in `.github/workflows/sync-upstream.yml` also merges upstream main into fork main once a day. If that merge conflicts, the workflow opens an issue in this fork. A conflict is a signal to stop and merge by hand, not to force it.
+A parent branch, repository main and an installed runtime are different states. Before a packaged build, record the tested native/fork SHA and canonical Exo SHA. Verify the intended merged features by content and behavior, and list any temporary alpha carries. A fork PR merge does not install its code.
 
-A sync is one way only. It brings upstream into the fork. It does not send desktop work upstream.
+Fork-only native work can be proposed upstream from current Exo main with only the reviewed native changes. A PR from fork main carries all fork history and cannot promise desktop files only.
 
-## Sending desktop work upstream
+## Prepare a draft sync
 
-Desktop work goes on a fork branch, then a pull request to fork main. When the desktop work is ready, open a cross-repo pull request from fork main to exo main, with the desktop files only. Do not carry the sync workflow into that pull request. The workflow is fork only, and its job condition already stops it running elsewhere.
+The helper uses a new private Git directory and the reserved `automation/exo-upstream-sync` branch. It makes normal merges, preserves history and creates or reuses an owned draft PR targeting fork main. It never pushes main, force-pushes, executes fetched code or tests, merges a PR, installs an app or restarts a core.
 
-## Issues
+Unexpected branch commits or a non-draft or unmarked PR require maintainer review. Markers are coordination guards, not cryptographic ownership. Conflicts go back to the source owners, without automatic runtime fixes.
 
-File desktop only issues in this fork. File core issues in exo. When a desktop issue depends on a core change, link the exo issue from the fork issue, and link back. Do not file the same issue in both repos.
+GitHub does not lock PR state and main together with a Git push. Either can change between a check and a write. Review the current base, combined tree and verification results before a maintainer merges the draft.
 
-While the exception above is in effect, core issues found through fork work may be filed in this fork, since that is where the work is happening. When the setup is consolidated later, those issues move to exo with links back, and the fork copies close.
+The workflow checks out fixed main, serializes runs and requires `EXO_SYNC_TOKEN`. Scheduled runs are disabled unless `EXO_SYNC_ENABLED` is `true`. Enable that repository variable only after the owner supplies the credential and verifies Actions. Manual dispatch remains available and reports a missing credential clearly.
 
-## When the rule breaks
+Until credentials are configured and an Actions run succeeds, use the helper manually with an already authorized host `gh` identity. Python 3, Git and GitHub CLI are required:
 
-If the fork starts editing the core, this setup no longer works. That is the signal to stop using a fork and work in exo directly. The desktop client already lives in `clients/desktop`, so the move is a pull request, not a rewrite.
+```sh
+python3 scripts/sync_upstream.py --manual --work-dir ../exo-desktop-sync-review-20261028
+```
+
+The work directory must not exist and is left for inspection. The operator's checkout is untouched. Repeated runs use new local directories and reuse the reserved remote branch and draft PR. If canonical main is included or the merged tree has no change, no PR is created.
+
+Authentication, fetch, merge conflict, merge failure, base drift, push and PR failures are distinct. `--report-failures` files stage-specific issues in this fork, deduplicated by a stable marker without daily comment spam. Reporting errors remain failures. Missing credentials may prevent issue reporting too.
+
+## Credential requirements
+
+An owner supplies `EXO_SYNC_TOKEN` through Actions secrets. The workflow creates no credential. It must read private `aska-digital/exo`, read and write fork contents and workflow files, and write fork PRs and failure issues.
+
+Use an approved GitHub App token or personal access token with the required repository access, organization authorization and permissions. Permissions can cover all selected repositories: the script's one-way access pattern is not a token sandbox.
+
+[App installation tokens expire after one hour](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app). This workflow does not mint or refresh them.
+
+A stored installation token alone is not a lasting schedule credential. An approved App setup must provide a fresh token per run, or the owner supplies and maintains a suitable personal token.
+
+`GITHUB_TOKEN` is not a substitute for private upstream access or workflow-file writes. The workflow uses masked secret inputs and environment variables. It never puts tokens in Git URLs or command-line arguments, or changes host authentication and Git configuration.
+
+GitHub documents [Actions token scope](https://docs.github.com/en/actions/concepts/security/github_token), [reference permissions including workflow updates](https://docs.github.com/en/rest/git/refs), and [PR permissions](https://docs.github.com/en/rest/pulls/pulls).
+
+A suitable App token or personal token avoids relying on the default token's workflow-trigger restrictions. This does not promise Actions availability or passing CI.
