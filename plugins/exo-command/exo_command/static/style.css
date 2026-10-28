@@ -812,6 +812,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); color-scheme: var(--s
 /* Searchable model routes: full route remains visible even when names overlap. */
 .xc-search-model-picker { width: 100%; min-width: 0; display: grid; gap: 8px; }
 .xc-search-model-picker label { display: grid; gap: 6px; }
+/* The picker keeps one column inside the grid composer: its own buttons are not the composer's send row. */
+.xc-search-model-picker > .xc-btnrow { grid-column: 1 / -1; justify-content: flex-start; }
 .xc-model-options { max-height: 260px; overflow-y: auto; border: 1px solid var(--line); }
 .xc-model-options:empty { display: none; }
 .xc-model-option { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
