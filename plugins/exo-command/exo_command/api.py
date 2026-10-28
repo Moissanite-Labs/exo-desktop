@@ -147,7 +147,8 @@ def _route(method: str, p: list, key: str):
 
 async def _sessions(c, p, q, body):
     try:
-        limit = min(int(q["limit"][0]), 500) if q.get("limit") else 100
+        # A negative limit is unlimited in SQLite, so clamp both ends: 0..500.
+        limit = max(0, min(int(q["limit"][0]), 500)) if q.get("limit") else 100
     except ValueError:
         raise BadRequest("limit must be a number")
     res = await c.source.call(s.SessionList(limit=limit))

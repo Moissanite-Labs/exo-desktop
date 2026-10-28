@@ -98,6 +98,18 @@ def test_bad_input_is_refused_before_any_command():
     assert src.calls == []
 
 
+def test_session_list_limit_is_clamped_at_both_ends():
+    src = FakeSource({"session.list": {"sessions": []}})
+    c = centre(src)
+    assert call(c, "GET", "/api/chat/sessions", q={"limit": ["99999"]})[0] == 200
+    assert src.calls[-1].limit == 500
+    # A negative limit is unlimited in SQLite: clamp it to 0, never pass it through.
+    assert call(c, "GET", "/api/chat/sessions", q={"limit": ["-1"]})[0] == 200
+    assert src.calls[-1].limit == 0
+    assert call(c, "GET", "/api/chat/sessions")[0] == 200
+    assert src.calls[-1].limit == 100
+
+
 def test_read_only_command_route():
     src = FakeSource({"command.run": {"output": "Next call for thread x"}})
     c = centre(src)
@@ -152,6 +164,32 @@ def test_model_change_http_requires_page_token_and_same_origin():
             assert src.calls == []
             assert await request({"X-Exo-Token": "model-test-token"}) == 200
             assert isinstance(src.calls[-1], s.ModelsSet) and src.calls[-1].session == "s1"
+        finally:
+            await web.close()
+    run(go())
+
+
+def test_approval_with_malformed_content_length_gets_400():
+    async def go():
+        src = FakeSource()
+        web = WebServer(centre(src), token="approve-test-token")
+        port = await web.start("127.0.0.1", 0)
+
+        async def request(length):
+            r, w = await asyncio.open_connection("127.0.0.1", port)
+            w.write(("POST /api/approvals/rid1 HTTP/1.1\r\n"
+                     f"Host: 127.0.0.1:{port}\r\nContent-Length: {length}\r\n"
+                     "X-Exo-Token: approve-test-token\r\n\r\n{}").encode())
+            await w.drain()
+            response = await r.read()
+            w.close()
+            await w.wait_closed()
+            return response
+        try:
+            for length in ("abc", "-5"):
+                response = await request(length)
+                assert response.split(b" ", 2)[1] == b"400", response
+                assert b"bad content-length" in response
         finally:
             await web.close()
     run(go())
