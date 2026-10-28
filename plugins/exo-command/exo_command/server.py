@@ -363,7 +363,7 @@ class WebServer:
             return None
         try:
             body = json.loads(await reader.readexactly(n)) if n else {}
-        except ValueError:
+        except (ValueError, RecursionError):
             body = None
         if not self._current(headers.get(prov.TOKEN_HEADER, "")):   # replaced while the body was on its way
             await self._json(writer, 403, BAD_TOKEN)
@@ -423,10 +423,12 @@ class WebServer:
             return await self._json(writer, 400, {"error": "body too large"})
         try:
             body = json.loads(await reader.readexactly(n)) if n else {}
-        except ValueError:
+        except (ValueError, RecursionError):
             return await self._json(writer, 400, {"error": "bad json"})
         if not self._current(headers.get(prov.TOKEN_HEADER, "")):   # replaced while the body was on its way
             return await self._json(writer, 403, BAD_TOKEN)
+        if not isinstance(body, dict):
+            return await self._json(writer, 400, {"error": "body must be a json object"})
         decision = body.get("decision")
         if decision not in DECISIONS:
             return await self._json(writer, 400, {"error": "decision must be one of {}".format(", ".join(DECISIONS))})
