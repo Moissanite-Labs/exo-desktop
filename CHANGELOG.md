@@ -5,12 +5,21 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 
 ## [Unreleased]
 
+- Added a gate PR preflight job that runs plugin acceptance and the base comparator, retaining its differential artifact (#423). Hosted execution and required-check configuration remain pending.
+
 ### Fixed
+
+- Fork-copy context lookups use a derived indexed original position instead of reparsing every message JSON on each call; existing rows backfill without changing signed message data (#450).
 - Foreground shell commands now mark nonzero exits, timeouts and interruptions as tool errors while retaining
   their output. Failed write-shaped commands no longer count as successful file progress in repeat detection.
   Successful pipelines with an earlier-stage failure note remain successful (#791).
 
 ### Added
+- Web workspace design with coordinated dark and light themes, readable conversation typography,
+  a full-width writing area, persistent accessible navigation and a saved Appearance choice.
+  Loaded conversations can be searched and filtered; Show latest messages restores the newest item
+  while streaming preserves the reader's position. Startup opens directly without a timed overlay.
+
 - Automatic continuity checkpoints index recent tool and job records after interruption,
   compaction and restart. `/checkpoint` shows the bounded index; uncertain effects stay explicit,
   private and child sessions are excluded, and no tools are replayed (`docs/WORK-CHECKPOINT.md`, #683 slice).
@@ -46,6 +55,12 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 
 ### Fixed
 
+- `exo config show`, `exo config get` and `config.get` mask a value shaped like a key that also holds a
+  `${VAR}`, such as `${USER}:sk-...` in a file written by hand. `config set` refused it, but the masking skipped
+  any string with a `${VAR}` in it. Both now use one test (#691, PR #674).
+- `exo.wire.verify` checks a signature only against a key the caller pins (exo-desktop #5, #17). Without one it
+  used the public key carried in the signature itself, which whoever made the packet chose, so any packet
+  signed by any key passed. With no pinned key it now returns False. No production caller used that path.
 - Gate: an `env -S` text keeps the ssh hop's host and is split as env splits it (#591, follow-up to #634, review
   5665626829). #634 read the text's leading words as env's argv beside the text as a shell line, in the call's
   one reading. Behind an ssh hop its new part took the host (the hop's lead, or #320's copy on a secret or store
@@ -160,6 +175,14 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   posting fixes stays held. Snake names and camelCase calls with no floor reading decide as before. Hook probe
   against main e0968a2b: 1360 lines, 164 changed, 0 lowered. Tests: `plugins/exo-gate/tests/test_camel_floor_hook.py`.
   **Docs:** `docs/GATE.md`, `DECISIONS.md` (D-065, D-038), `docs/DEVELOPER-GUIDE.md` §3.
+- A correction to the #703 entry above (review 5675164403 of #703): not every snake name decides as before. A snake
+  shell call whose own folder argument is a secret folder (#311) now asks once in bypass too. Its line keeps its own
+  category (`read` for `cat` and `ls`), and the store read is a `credentials` part, which the floor now reads. So
+  `terminal`, `bash` and `exec_command` running `cat config` with `workdir` `~/.kube`, and `bash` running `ls` with
+  `cwd` `~/.exo/keys`, `~/.aws` or `~/.claude`, ran in bypass on main 58503282 and ask once since #703. This is
+  what D-065 asks for: secrets still ask. `cat ~/.kube/config` asked on both. A shell call in an ordinary folder
+  decides as before. No code change. Tests: `plugins/exo-gate/tests/test_camel_floor_hook.py`. **Docs:**
+  `docs/GATE.md`, `DECISIONS.md` (D-065), `docs/DOCS-MAP.md`.
 - `/tab` tells the user when the new window loses a permission flag (#669). The flag is dropped from the
   new command, but the new window keeps `--seat` and `EXO_HOME`, so it joins this core (D-028, D-039) and
   the core's permission mode still applies there, bypass included: the warning says that rather than
