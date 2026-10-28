@@ -84,7 +84,8 @@ credential on that connection (D-060, `docs/GATE.md` "Unix peer authentication")
 with a new record, and refuses a socket that some other process serves. A refusal shows on the page with its reason
 (for a core from before D-060: "launch record is not a v1 record") and a restart hint: run `exo stop` (or close the
 Exo window that runs the core), then reopen the page. The optional
-ASGI app (`asgi.py`) is gone: it re-exposed the routes with no checks.
+ASGI app (`asgi.py`) is gone: it re-exposed the routes with no checks. An approval answer whose `Content-Length`
+is not a number, or is negative, gets a 400 answer instead of a dropped connection (D-085).
 
 The stream resumes through the core’s durable event log when its cursor has fallen outside the web event ring.
 After replay the page refreshes durable messages, session activity, open panels and pending approvals. Composer
@@ -170,7 +171,8 @@ The Providers tab (D-034, demo data) is in `docs/ui/`: `web-providers.png` and `
   not when the turn ends: a steer that arrives while a turn is finishing starts the next turn (#147). Reopening the
   thread drops a chip the core no longer queues (`GET /api/chat/sessions/<id>` lists the queued ids as `steers`).
 - **Thread list.** Double-click a thread to rename it (or type `/rename <title>`): `POST /api/chat/sessions/<id>/rename`,
-  the core `rename` built-in, principal only (D-069).
+  the core `rename` built-in, principal only (D-069). The list fetch (`GET /api/chat/sessions`) takes a `limit`
+  query value clamped to 0..500, default 100 (D-085).
 - **Event stream.** `bus.js` reopens the stream itself from the last seq when the browser gives up (EventSource never
   retries after an HTTP error such as a 403 after a restart or a 502 while the core restarts), ignores a seq it has
   already handled, and the server resumes from the later of `?since=` and `Last-Event-ID`. Before D-045 a drop replayed

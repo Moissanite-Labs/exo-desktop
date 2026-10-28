@@ -58,6 +58,7 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   `f` prefix preserves the test cases and removes the two findings.
 - The web composer's command list names `/tab` again (#661): the command joined the terminal client in #621
   but never entered the completion table the web route reads its client commands from.
+- The session list `limit` is clamped to 0..500, so a negative value no longer means unlimited in the store query. An approval answer with a malformed or negative `Content-Length` gets a 400 answer instead of a dropped connection (aska-digital/exo-desktop#55).
 - Context: `_carry_pins` reads the parent's pins fresh from disk, so a pin the parent undid does not resurrect in a child bound from it (#645).
 - A `$((` bash reads as a command substitution is read as one now (#553). bash closes the `$( ` at the first `)`
   outside quotes, backquotes, `$( )` bodies and comments, and reads the span as arithmetic only when the text
