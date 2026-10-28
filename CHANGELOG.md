@@ -7,6 +7,7 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 
 ### Fixed
 
+- Chat Threads sidebar groups delegated scout sessions beneath their parent conversation (#38). Grouping uses only the session's own `parent` + `kind="subagent"` metadata from `session.list`, never a title prefix; a scout whose parent is not in the list stays top-level as an orphan, still openable. A thread with no title shows `Untitled thread` (or `Untitled scout`) plus its full session id.
 - Context: `_carry_pins` reads the parent's pins fresh from disk, so a pin the parent undid does not resurrect in a child bound from it (#645).
 - A `$((` bash reads as a command substitution is read as one now (#553). bash closes the `$( ` at the first `)`
   outside quotes, backquotes, `$( )` bodies and comments, and reads the span as arithmetic only when the text
