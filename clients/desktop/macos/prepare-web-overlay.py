@@ -28,7 +28,7 @@ if a.with_approval_shortcuts:
         if hashlib.sha256((source / 'exo-command/exo_command/static' / name).read_bytes()).hexdigest() != digest:
             p.error('selected web asset differs from the verified approval baseline: ' + name)
 if a.with_model_picker:
-    accepted = {'chat.js': ['a8bc3ec5746548d835397fcfb4e1733e5ca6ac81679f907ed9a1f13bd5c69e91', '16c8ce283226807fae222f952da5fea8f62d0e8f525b4c50ecb12fdeff2ddd60'], 'providers.js': ['31bf3bbcb5066d5b1fab1dd23f970a66cbf8ed0d113b0be0fbae728fbf77a2d2'], 'style.css': ['df87e01ebc8f869bde86de7e1c485b10828832d353b397d8b4c2772ec07c6ac3']}
+    accepted = {'chat.js': ['a8bc3ec5746548d835397fcfb4e1733e5ca6ac81679f907ed9a1f13bd5c69e91', '16c8ce283226807fae222f952da5fea8f62d0e8f525b4c50ecb12fdeff2ddd60'], 'providers.js': ['31bf3bbcb5066d5b1fab1dd23f970a66cbf8ed0d113b0be0fbae728fbf77a2d2', '2616a9e475b12cb6dc4d071ba260e61c855df513267a7d82f8eaf991ae0e710e'], 'style.css': ['df87e01ebc8f869bde86de7e1c485b10828832d353b397d8b4c2772ec07c6ac3']}
     for name, digests in accepted.items():
         if hashlib.sha256((source / 'exo-command/exo_command/static' / name).read_bytes()).hexdigest() not in digests:
             p.error('selected web asset differs from the verified picker baseline: ' + name)

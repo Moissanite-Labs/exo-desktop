@@ -122,3 +122,105 @@ process.stdout.write(JSON.stringify([context.chip(row), context.chip({ ...row, s
                           capture_output=True, text=True, timeout=10)
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout) == [["no base_url", "off"], ["key found", "known"]]
+
+
+NODE = shutil.which("node")
+
+
+def run_node(script):
+    proc = subprocess.run([NODE, "-e", script, str(STATIC / "providers.js")],
+                          capture_output=True, text=True, timeout=10)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+@pytest.mark.skipif(not NODE, reason="Node is needed to execute the model-list read")
+def test_a_failed_model_read_keeps_the_last_good_list_and_names_its_kind():
+    """D-091: the read never empties the picker on a failure, and a refused request is not offered a retry."""
+    script = r'''
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const func = src.slice(src.indexOf("async function loadModels("), src.indexOf("async function load("));
+const scope = `
+let models = null, modelsError = null, alive = true, loadGeneration = 0, apiImpl = null;
+async function api() { return apiImpl(); }
+${func}
+this.run = async (start, impl, generation) => {
+  models = start; modelsError = null; loadGeneration = generation; apiImpl = impl;
+  await loadModels(generation);
+  return { models, modelsError };
+};
+this.supersede = (n) => { loadGeneration = n; };`;
+const context = {};
+vm.createContext(context);
+vm.runInContext(scope, context);
+const good = { models: [{ role: "main", route: "p:one" }], available: [] };
+(async () => {
+  const kept = await context.run(good, async () => {
+    const e = new Error("The connection was lost."); e.name = "transport"; throw e;
+  }, 1);
+  const down = await context.run(good, async () => ({ models: [], available: [],
+    error: "Exo core is not reachable.", error_class: "transport", retryable: true }), 2);
+  const refused = await context.run(good, async () => ({ models: [], available: [],
+    error: "Only the principal may list models.", error_class: "authority", retryable: false }), 3);
+  const stale = await context.run(good, async () => {
+    context.supersede(9);                                  // a newer read started while this one was waiting
+    return { models: [], available: [], error: "late", error_class: "transport", retryable: true };
+  }, 4);
+  const first = await context.run(null, async () => ({ models: [{ role: "main", route: "p:two" }], available: [] }), 5);
+  process.stdout.write(JSON.stringify({ kept, down, refused, stale, first, modelsAfter: context.run.length >= 0 }));
+})().catch((e) => { process.stderr.write(String(e)); process.exit(1); });
+'''
+    out = run_node(script)
+    assert out["kept"]["models"] == {"models": [{"role": "main", "route": "p:one"}], "available": []}
+    assert out["kept"]["modelsError"] == {"text": "The connection was lost.", "cls": "other", "retryable": True}
+    assert out["down"]["modelsError"] == {"text": "Exo core is not reachable.", "cls": "transport", "retryable": True}
+    assert out["refused"]["modelsError"] == {"text": "Only the principal may list models.", "cls": "authority", "retryable": False}
+    assert out["stale"]["models"] == {"models": [{"role": "main", "route": "p:one"}], "available": []}
+    assert out["stale"]["modelsError"] is None, "a superseded read must not overwrite the newer one"
+    assert out["first"]["models"] == {"models": [{"role": "main", "route": "p:two"}], "available": []}
+
+
+@pytest.mark.skipif(not NODE, reason="Node is needed to execute the default-model picker")
+def test_the_picker_offers_a_retry_only_where_retrying_can_help():
+    """D-091: a refusal says to reopen the tab after the core restarts; a transport failure gets a button, and a
+    kept list carries the reason above itself instead of replacing it."""
+    script = r'''
+const fs = require("fs"), vm = require("vm");
+const src = fs.readFileSync(process.argv[1], "utf8");
+const func = src.slice(src.indexOf("function picker("), src.indexOf("function draw("));
+const scope = `
+function h(tag, props, ...kids) { return { tag, props, kids }; }
+function createModelPicker(opts) { const el = { tag: "picker", opts, error: null };
+  return { element: el, focus() {}, setRows() {}, setError: (t) => { el.error = t; } }; }
+let results = {}, picked = "", models = null, modelsError = null;
+function saveDefault() {} function retryModels() {}
+${func}
+this.run = (rows, err) => { models = rows; modelsError = err; return picker(); };`;
+const context = {};
+vm.createContext(context);
+vm.runInContext(scope, context);
+const rows = { models: [{ role: "main", route: "p:one" }], available: [] };
+const pick = (rowsIn, err) => {
+  const out = context.run(rowsIn, err);
+  const [section, warn, retry] = [out, ...out.kids];
+  const inner = out.kids[0];
+  return { rows: inner.opts.rows, error: inner.error, warn: (out.kids[1] && out.kids[1].props && out.kids[1].props.class) || null,
+    retry: out.kids.some((k) => k && k.tag === "div" && k.props && k.props.class === "xc-prov-def-act") };
+};
+process.stdout.write(JSON.stringify({
+  transport: pick(null, { text: "The core is down.", cls: "transport", retryable: true }),
+  authority: pick(null, { text: "Only the principal may do this.", cls: "authority", retryable: false }),
+  kept: pick(rows, { text: "The core is down.", cls: "transport", retryable: true }),
+  fine: pick(rows, null),
+}));
+'''
+    out = run_node(script)
+    assert out["transport"]["rows"] == [] and out["transport"]["error"] == "The core is down."
+    assert out["transport"]["retry"] is True
+    assert out["authority"]["rows"] == [] and out["authority"]["retry"] is False
+    assert out["authority"]["error"] == "Only the principal may do this. Reopen this tab after the core restarts."
+    assert out["kept"]["rows"] == [{"role": "main", "route": "p:one"}]
+    assert out["kept"]["warn"] == "xc-warn" and out["kept"]["error"] is None
+    assert out["fine"]["warn"] is None and out["fine"]["retry"] is False
+    assert out["fine"]["rows"] == [{"role": "main", "route": "p:one"}]
