@@ -5207,3 +5207,9 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   ceiling off, the same six pass on a tree that counts 15,828, where they fail on `main` at `13cea687`.
 - **Docs:** `docs/ENGINE-SPLIT.md` "Budget policy", `docs/DEVELOPER-GUIDE.md` §7, `docs/WHITEPAPER.md` §27,
   `docs/DOCS-MAP.md`, `CHANGELOG.md`.
+
+## D-088 (2026-10-27) Per-seat GitHub auth carries the core line budget over the ceiling (issue #51 exception)
+- **Status:** Accepted 2026-10-27 in the fork as D-083 (exo-desktop #22). Renumbered D-088 in the exo sync (exo-desktop #77), because exo's D-083 is the principal's no-ceiling ruling. **Superseded by D-083:** with no line ceiling there is no `CORE_HEADROOM` to raise, so this entry changes nothing today. The structural caps (39 inward imports, 8 private-state reads) still apply.
+- **Why:** the #22 stack counts 16,066 core lines, 242 over the 15,824 ceiling, and main itself is already 15 over. The budget policy (D-077) says a feature that crosses the ceiling waits for a reduction or carries a recorded decision. This entry is that decision.
+- **Decision:** `CORE_HEADROOM` rises from 1011 to 1300, ceiling 16,116, leaving 50 lines of headroom on the #22 stack. The floor does not move. A real reduction is still owed, and the headroom does not grow again without a new recorded decision.
+- **Cost:** the count signal is weaker until that reduction lands. The structural goal in the budget policy (no private-state reads across module boundaries, no product imports into the engine) is unchanged.
