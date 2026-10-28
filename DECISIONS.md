@@ -4973,3 +4973,9 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
 - **Why:** the #22 stack counts 16,066 core lines, 242 over the 15,824 ceiling, and main itself is already 15 over. The budget policy (D-077) says a feature that crosses the ceiling waits for a reduction or carries a recorded decision. This entry is that decision.
 - **Decision:** `CORE_HEADROOM` rises from 1011 to 1300, ceiling 16,116, leaving 50 lines of headroom on the #22 stack. The floor does not move. A real reduction is still owed, and the headroom does not grow again without a new recorded decision.
 - **Cost:** the count signal is weaker until that reduction lands. The structural goal in the budget policy (no private-state reads across module boundaries, no product imports into the engine) is unchanged.
+
+## D-085 (2026-10-27) Session-list limit clamped; malformed approval Content-Length gets a 400
+- **Status:** Accepted 2026-10-27 (PR for audit issue #55, desktop findings 1). Numbered D-085 to follow D-084 (gate-error cards, PR #23) and avoid D-083, the core budget decision carried on the alpha stack.
+- **Why:** a negative `limit` on `GET /api/chat/sessions` reached SQLite, where a negative LIMIT means unlimited, so one request could return every session. A malformed `Content-Length` on an approval answer raised inside `_approve` and the connection closed with no answer.
+- **Decision:** the session-list limit is clamped to 0..500, default 100. An approval answer whose `Content-Length` is not a number, or is negative, gets a 400 answer naming the bad header.
+- **Docs:** `docs/ui/WEB.md` "Opening the page and the page token" and "What is where".
