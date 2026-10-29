@@ -13,6 +13,7 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   reported as unreachable, and a failed load keeps the last good list, so the default picker stays usable
   (D-091).
 
+- Short chat windows scroll the chat column when status text expands, keeping the transcript and composer reachable.
 - Fork-copy context lookups use a derived indexed original position instead of reparsing every message JSON on each call; existing rows backfill without changing signed message data (#450).
 - The web workspace guidance line no longer tells the reader to check keys after a connection or timeout failure; credential advice is shown only when the recorded error reads as an authentication or permission failure, and an unreadable error points at `/trace` (#756).
 - Foreground shell commands now mark nonzero exits, timeouts and interruptions as tool errors while retaining
@@ -101,6 +102,16 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   2,737,512 pairs on the 7,092 lines with a `((` of that corpus and 4,950 new arithmetic-header lines (135,509
   tightened on 4,752 actions). Tests: `tests/security/test_gate_loop_cd_store_479.py`. **Docs:** `docs/GATE.md`
   "The store is credentials (D-038)", `DECISIONS.md` (D-038 amendment of 2026-10-28), `docs/DOCS-MAP.md`.
+- A `while` or `until` loop whose condition starts with the `cd` into the store is read again too (#857, a #479
+  follow-up). The condition runs on every pass, so in `while cd ~/.exo/policies$(cp /tmp/evil gates.yaml); do
+  sleep 1; done` the `cp` rewrites the policy file from the second pass; it and five other spellings (`until !
+  cd`, backticks, `pushd`, `< <(..)`, a `cd` in an `if`) were allowed reads on main 1401ff81, also under `deny:
+  [store_write]`. They are now `store_write`, as the #479 rows are. A condition's `cd` into a descriptor folder
+  names that folder when the body holds no `cd` of its own (`while cd /dev/fd < <(cp /tmp/evil 3); do :; done`
+  denies under `deny: [target:/dev*]`). Main's `scripts/gate_diff.py`: 0 of 10,616,630 pairs
+  lowered (built-in corpus, 11,044 aimed loop lines, `/dev*`, `/proc*` and `*store*` target rules kept apart).
+  Tests: `tests/security/test_gate_loop_cd_store_479.py`. **Docs:** `docs/GATE.md`, `DECISIONS.md` (D-038
+  amendment, #857), `docs/DOCS-MAP.md`.
 
 - `exo config show`, `exo config get` and `config.get` mask a value shaped like a key that also holds a
   `${VAR}`, such as `${USER}:sk-...` in a file written by hand. `config set` refused it, but the masking skipped
