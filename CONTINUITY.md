@@ -1,10 +1,8 @@
 # Exo desktop continuity
 
-The [2026-10-28 decision](https://github.com/aska-digital/exo/discussions/746) makes Exo the shared implementation home. Its workflow document is pending in [Exo PR #747](https://github.com/aska-digital/exo/pull/747).
+The [2026-10-28 decision](https://github.com/Moissanite-Labs/exo/discussions/746) makes Exo the shared implementation home. [Exo PR #747](https://github.com/Moissanite-Labs/exo/pull/747) landed that policy.
 
-Use the [reviewed policy text](https://github.com/aska-digital/exo/blob/a856b3b7ddc22505f22fec55b9d87692ddc30bad/docs/REPOSITORY-WORKFLOW.md) until that PR merges.
-
-The permanent target is [canonical Exo's workflow document](https://github.com/aska-digital/exo/blob/main/docs/REPOSITORY-WORKFLOW.md). This file covers fork operations, not a second feature policy.
+The authority is [canonical Exo's workflow document](https://github.com/Moissanite-Labs/exo/blob/main/docs/REPOSITORY-WORKFLOW.md). This file covers fork operations, not a second feature policy.
 
 Native shell and packaging work belongs under `clients/desktop`. Fork maintenance exceptions are this file, the local `AGENTS.md` pointer, the sync workflow, `scripts/sync_upstream.py` and its tests. Shared runtime and web work has one canonical Exo PR.
 
@@ -36,7 +34,7 @@ Authentication, fetch, merge conflict, merge failure, base drift, push and PR fa
 
 ## Credential requirements
 
-An owner supplies `EXO_SYNC_TOKEN` through Actions secrets. The workflow creates no credential. It must read private `aska-digital/exo`, read and write fork contents and workflow files, and write fork PRs and failure issues.
+An owner supplies `EXO_SYNC_TOKEN` through Actions secrets. The workflow creates no credential. It must read `Moissanite-Labs/exo`, read and write desktop contents and workflow files, and write desktop PRs and failure issues. Both repositories are public after the transfer. The write credential is still required.
 
 Use an approved GitHub App token or personal access token with the required repository access, organization authorization and permissions. Permissions can cover all selected repositories: the script's one-way access pattern is not a token sandbox.
 
@@ -44,7 +42,7 @@ Use an approved GitHub App token or personal access token with the required repo
 
 A stored installation token alone is not a lasting schedule credential. An approved App setup must provide a fresh token per run, or the owner supplies and maintains a suitable personal token.
 
-`GITHUB_TOKEN` is not a substitute for private upstream access or workflow-file writes. The workflow uses masked secret inputs and environment variables. It never puts tokens in Git URLs or command-line arguments, or changes host authentication and Git configuration.
+`GITHUB_TOKEN` is not a substitute for the required workflow-file writes. The workflow uses masked secret inputs and environment variables. It never puts tokens in Git URLs or command-line arguments, or changes host authentication and Git configuration.
 
 GitHub documents [Actions token scope](https://docs.github.com/en/actions/concepts/security/github_token), [reference permissions including workflow updates](https://docs.github.com/en/rest/git/refs), and [PR permissions](https://docs.github.com/en/rest/pulls/pulls).
 
