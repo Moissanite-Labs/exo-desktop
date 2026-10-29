@@ -40,6 +40,18 @@ if [ "$attached" = true ]; then
 else
   python3 make-launcher.py --output "$app/Contents/Resources/exo-alpha" --exo "$exo"
 fi
+# Scope UI choices to the selected runtime identity, without persisting its paths in preferences.
+preference_scope=$(python3 - "$attached" "$exo_home" "$seat" "$socket" <<'PYSCOPE'
+import hashlib, json, os, sys
+mode, home, seat, socket = sys.argv[1:]
+if mode == 'true':
+    identity = ['attached', os.path.realpath(os.path.expanduser(home)), seat, os.path.realpath(os.path.expanduser(socket))]
+else:
+    identity = ['isolated', os.path.expanduser('~/Library/Application Support/Exo Desktop Alpha/runtime')]
+print(hashlib.sha256(json.dumps(identity, separators=(',', ':')).encode()).hexdigest())
+PYSCOPE
+)
+/usr/libexec/PlistBuddy -c "Add :ExoPreferenceScope string $preference_scope" "$plist"
 codesign --force --sign - "$app"
 codesign --verify --strict "$app"
 mkdir -p "$HOME/Applications"
