@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSTextFieldDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSTextFieldDelegate, WKScriptMessageHandler {
     private var window: NSWindow?
     private var webView: WKWebView?
     private var findBar: NSView?
@@ -20,6 +20,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var terminating = false
     private var showingFailure = false
     private var hasReachedReady = false
+    private let desktopPreferences: DesktopPreferences?
+    private static func configuredPreferences() -> DesktopPreferences? {
+        let environment = ProcessInfo.processInfo.environment
+        // A runtime override has no installer-verified core identity. Do not restore another core's pointer.
+        guard (environment["EXO_DESKTOP_EXO"] ?? "").isEmpty else { return nil }
+        // The installer-verified identity applies only to its bundled launcher and user home.
+        // Missing resources must not enable restoration through findExo's unrelated PATH fallback.
+        guard let bundled = Bundle.main.resourceURL?.appendingPathComponent("exo-alpha"),
+              FileManager.default.isExecutableFile(atPath: bundled.path),
+              let expectedHome = Bundle.main.object(forInfoDictionaryKey: "ExoPreferenceUserHome") as? String,
+              let runtimeHome = environment["HOME"],
+              URL(fileURLWithPath: expectedHome).resolvingSymlinksInPath() == URL(fileURLWithPath: runtimeHome).resolvingSymlinksInPath() else { return nil }
+        if Bundle.main.object(forInfoDictionaryKey: "ExoAttachedCore") as? Bool != true,
+           !(environment["EXO_SEAT"] ?? "").isEmpty { return nil }
+        guard let scope = Bundle.main.object(forInfoDictionaryKey: "ExoPreferenceScope") as? String,
+              scope.count == 64, scope.allSatisfy({ $0.isHexDigit }) else { return nil }
+        return DesktopPreferences(scope: scope)
+    }
+    override convenience init() { self.init(preferences: Self.configuredPreferences()) }
+    init(preferences: DesktopPreferences?) {
+        self.desktopPreferences = preferences
+        super.init()
+    }
+    private let frameAutosaveName = "ExoDesktopMain"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -29,7 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             backing: .buffered,
             defer: false
         )
-        window.center()
+        let restored = window.setFrameUsingName(frameAutosaveName)
+        window.setFrameAutosaveName(frameAutosaveName)
+        if !restored || !NSScreen.screens.contains(where: { window.frame.intersects($0.visibleFrame) }) { window.center() }
         window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Exo"
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
@@ -37,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        if desktopPreferences != nil { configuration.userContentController.add(self, name: "exoDesktop") }
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -95,6 +122,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     func windowDidResize(_ notification: Notification) {
         layoutViews()
+        window?.saveFrame(usingName: frameAutosaveName)
+    }
+
+    func windowDidMove(_ notification: Notification) { window?.saveFrame(usingName: frameAutosaveName) }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard !transitioning, !terminating, message.webView === webView, message.name == "exoDesktop",
+              DesktopPreferences.allows(origin: origin, frameURL: message.frameInfo.request.url, mainFrame: message.frameInfo.isMainFrame),
+              let patch = message.body as? [String: Any] else { return }
+        desktopPreferences?.update(patch)
     }
 
     /// Top find bar (when shown), bottom status bar, web view between them.
@@ -132,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func startServer() {
         guard !terminating, let webView else { return }
         transitioning = true
+        origin = nil
         hasReachedReady = false
         setStatus("Starting Exo…", busy: true)
         let currentLauncher = launcher
@@ -179,6 +217,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 if ok {
                     self.transitioning = false
                     self.origin = url
+                    let controller = self.webView?.configuration.userContentController
+                    controller?.removeAllUserScripts()
+                    if let preferences = self.desktopPreferences {
+                        controller?.addUserScript(WKUserScript(source: preferences.script(origin: url), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+                    }
                     self.webView?.load(URLRequest(url: url))
                 } else if attempt < 3 {
                     DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
