@@ -12,9 +12,12 @@ from exo_command import providers
 @pytest.mark.parametrize('retryable', [True, False])
 def test_cached_model_error_has_retry_only_when_allowed(monkeypatch, retryable):
     reads = []
+    saves = []
     failing = [False]
 
     async def handle(centre, method, path, body, router_factory=None):
+        if path == '/api/providers/default':
+            saves.append(body)
         if path == '/api/providers':
             return 200, {'providers': [{'provider': 'demo', 'needs': 'none', 'ready': True}], 'ready': True, 'store': 'environment'}
         if path == '/api/providers/models':
@@ -29,19 +32,20 @@ def test_cached_model_error_has_retry_only_when_allowed(monkeypatch, retryable):
     try:
         with Browser() as b:
             b.goto(srv.url('providers'))
-            b.wait("document.querySelector('select[aria-label=\"Default model\"]')?.value === 'demo:first'")
+            b.wait("document.querySelector('.xc-model-option[aria-selected=true] .xc-model-route')?.textContent === 'demo:first'")
             failing[0] = True
             b.eval("[...document.querySelectorAll('button')].find(b=>b.textContent==='Test').click()")
             b.wait("document.body.textContent.includes('This list is from the last good read.')")
-            assert b.eval("document.querySelector('select[aria-label=\"Default model\"]').value") == 'demo:first'
+            assert b.eval("document.querySelector('.xc-model-option[aria-selected=true] .xc-model-route').textContent") == 'demo:first'
             assert b.eval("[...document.querySelectorAll('button')].filter(b=>b.textContent==='Try again').length") == int(retryable)
             if retryable:
                 failing[0] = False
                 before = len(reads)
                 b.eval("[...document.querySelectorAll('button')].find(b=>b.textContent==='Try again').click()")
-                b.wait("!!document.querySelector('option[value=\"demo:recovered\"]')")
+                b.wait("[...document.querySelectorAll('.xc-model-route')].some(x=>x.textContent==='demo:recovered')")
                 assert not b.eval("document.body.textContent.includes('This list is from the last good read.')")
-                b.wait("document.querySelector('select[aria-label=\"Default model\"]')?.value === 'demo:first'")
+                b.wait("document.querySelector('.xc-model-option[aria-selected=true] .xc-model-route')?.textContent === 'demo:first'")
                 assert len(reads) == before + 1
+            assert not saves
     finally:
         srv.close()

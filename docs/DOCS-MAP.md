@@ -31,7 +31,7 @@ developer-guide sections are written `§N`. Whitepaper sections are written `WP 
 
 | Feature | Technical doc | User guide | Developer guide | Whitepaper |
 |---|---|---|---|---|
-| Draft desktop integration of native preferences, confirmations and pending canonical #826/#933 (review only) | `clients/desktop/INTEGRATION-20261029.md`, `LOCAL-ACCEPTANCE.md` | n/a (draft integration only) | `CONTINUITY.md` (sync workflow) | n/a |
+| Draft desktop integration of native preferences, confirmations and pending canonical #826/#932/#933 (review only) | `clients/desktop/INTEGRATION-20261029.md`, `LOCAL-ACCEPTANCE.md` | n/a (draft integration only) | `CONTINUITY.md` (sync workflow) | n/a |
 | Agent and human work vessel (PROPOSAL, pending) | `docs/AGENT-OPERATOR-DESIGN.md` | n/a (proposal only) | §1 proposal pointer | n/a (proposal only) |
 | D-086 Optional session working notes (In progress) | `docs/WORK-NOTEBOOK.md`, `docs/evidence/work-notebook-gate-2026-10-23.json` | §1 "Saved working notes" | §1 "Session working notes" | MISSING (next batch) |
 | D-086 amendment: automatic continuity index (#683 slice) | `docs/WORK-CHECKPOINT.md` | §1 "Continuing after interruption" | §1 "Automatic continuity checkpoints" | MISSING (next batch) |
