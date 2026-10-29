@@ -45,13 +45,16 @@ extension AppDelegate {
     let sheet=w.attachedSheet!; let all=buttons(sheet.contentView!)
     precondition(all.contains{$0.title=="Cancel"} && all.contains{$0.title=="Continue"})
     precondition(sheet.defaultButtonCell?.title == "Cancel", "Return default must be Cancel")
+    if title=="transition during sheet" { self.transitioning=true }
+    if title=="origin replaced during sheet" { self.origin=URL(string:"http://127.0.0.1:1/")! }
+    if title=="navigation during sheet" { self.pageGeneration += 1 }
     if title=="Escape" || title=="Return" {
      sheet.makeKeyAndOrderFront(nil)
      RunLoop.current.run(until:Date().addingTimeInterval(0.3))
      let character=String(UnicodeScalar(title=="Escape" ? 27 : 13)!)
      let event=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:sheet.windowNumber,context:nil,characters:character,charactersIgnoringModifiers:character,isARepeat:false,keyCode:title=="Escape" ? 53 : 36)!
      NSApp.sendEvent(event)
-    } else { all.first{$0.title==title}!.performClick(nil) }
+    } else { all.first{$0.title==(title.contains("during sheet") ? "Continue" : title)}!.performClick(nil) }
    }
    wait { result != nil || error != nil }; precondition(error==nil && result==expected)
    print("PASS native confirm \\(title) expected \\(expected)")
@@ -59,6 +62,9 @@ extension AppDelegate {
   confirm("Cancel",expected:false); confirm("Continue",expected:true)
   confirm("Return",expected:false)
   confirm("Escape",expected:false)
+  confirm("transition during sheet",expected:false); self.transitioning=false
+  confirm("origin replaced during sheet",expected:false); self.origin=url
+  confirm("navigation during sheet",expected:false)
   self.transitioning=true
   confirm("restart pending",expected:false,allowed:false)
   self.transitioning=false

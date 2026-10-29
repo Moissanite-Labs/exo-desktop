@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         super.init()
     }
     private let frameAutosaveName = "ExoDesktopMain"
+    private var pageGeneration = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -281,6 +282,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             completionHandler(false)
             return
         }
+        let expectedOrigin = origin
+        let expectedGeneration = pageGeneration
         let alert = NSAlert()
         alert.messageText = "Confirm action"
         alert.informativeText = String(message.prefix(4000))
@@ -299,7 +302,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         }
         alert.beginSheetModal(for: window) { result in
             if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor) }
-            completionHandler(result == .alertSecondButtonReturn)
+            completionHandler(result == .alertSecondButtonReturn && self.webView === webView
+                              && !self.transitioning && !self.terminating
+                              && self.origin == expectedOrigin && self.pageGeneration == expectedGeneration)
         }
     }
 
@@ -316,6 +321,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         alert.informativeText = String(message.prefix(4000))
         alert.addButton(withTitle: "OK")
         alert.beginSheetModal(for: window) { _ in completionHandler() }
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if webView === self.webView { pageGeneration += 1 }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
