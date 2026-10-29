@@ -26,9 +26,11 @@ with tempfile.TemporaryDirectory(prefix="exo-composed-wk-") as directory:
         [
             "swiftc",
             str(temp / "main.swift"),
-            str(native / "DesktopPreferences.swift"),
-            str(native / "NativeDialogPolicy.swift"),
-            str(native / "ExoWebLauncher.swift"),
+            *[
+                str(path)
+                for path in sorted(native.glob("*.swift"))
+                if path.name != "main.swift"
+            ],
             "-framework",
             "AppKit",
             "-framework",
