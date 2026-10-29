@@ -25,6 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         let environment = ProcessInfo.processInfo.environment
         // A runtime override has no installer-verified core identity. Do not restore another core's pointer.
         guard (environment["EXO_DESKTOP_EXO"] ?? "").isEmpty else { return nil }
+        // The installer-verified identity applies only to its bundled launcher and user home.
+        // Missing resources must not enable restoration through findExo's unrelated PATH fallback.
+        guard let bundled = Bundle.main.resourceURL?.appendingPathComponent("exo-alpha"),
+              FileManager.default.isExecutableFile(atPath: bundled.path),
+              let expectedHome = Bundle.main.object(forInfoDictionaryKey: "ExoPreferenceUserHome") as? String,
+              let runtimeHome = environment["HOME"],
+              URL(fileURLWithPath: expectedHome).resolvingSymlinksInPath() == URL(fileURLWithPath: runtimeHome).resolvingSymlinksInPath() else { return nil }
         if Bundle.main.object(forInfoDictionaryKey: "ExoAttachedCore") as? Bool != true,
            !(environment["EXO_SEAT"] ?? "").isEmpty { return nil }
         guard let scope = Bundle.main.object(forInfoDictionaryKey: "ExoPreferenceScope") as? String,
