@@ -1,24 +1,37 @@
-# Local native/web acceptance composition
+# Local native and web acceptance
 
-This branch is a disposable integration experiment, not an official downstream sync pin, release, install, or authorization to change the live app.
+This branch tests desktop integration with pending shared changes. It does not update an official sync pin, release an app or change an installed runtime.
 
-Sources:
+## Inputs
 
-- Desktop main: ace641c32eb8692b26a2839643fc99a8c445c45b
-- Native preference successor: 6a836f1e8693f9698c27f521649475ce8d24ba4b
-- Native confirmation successor: 8c832adb02fca2e28dcde90a35d37d9e63fa90af
-- Canonical web preference consumer: a81f2f0fa127fbcde73d3a739af575d6c04cfced
-- Pending canonical cached-provider retry: d32b6d2f624cd1a562c3ec2919afbc53b4535bb8
-- Pending canonical Exopet: d911b390e989d1bbb33bc7c3fce3e2094f9ff5a9
+| Source | Commit |
+|---|---|
+| Desktop main | `ace641c32eb8692b26a2839643fc99a8c445c45b` |
+| Native preferences | `5838a68ea0b40813b16be37e6aee82268602f747` |
+| Native confirmations | `923860a6a8dd1dd0f1ff530b0562c929e84d4350` |
+| Web preferences | `1103f530ea8e1acd58caf817addfddccc299a591` |
+| Cached-provider retry | `d32b6d2f624cd1a562c3ec2919afbc53b4535bb8` |
+| Companion | `d911b390e989d1bbb33bc7c3fce3e2094f9ff5a9` |
 
-The local merges preserve desktop picker-generation cleanup, pet detach/state synchronization and the canonical native-reading restoration guards together. Test fixture module lists include both optional modules. Canonical minimum-positive session-list validation was retained.
+## Reproduce on a Mac graphical session
 
-Run the composed native acceptance on a Mac graphical session with an existing test Python environment:
+Use an existing test Python environment with the repository dependencies:
 
 ```sh
 EXO_BUS_URL=http://127.0.0.1:9 python clients/desktop/macos/Tests/test_native_workspace_acceptance.py
+python3 clients/desktop/macos/Tests/test_native_dialog_acceptance.py
+python3 clients/desktop/macos/Tests/test_native_preferences_acceptance.py
+python3 clients/desktop/macos/Tests/test_native_preference_context.py
 ```
 
-It compiles the production native delegate, calls its real HTTP verification/document-start injection path, uses the actual web assets/API with a synthetic core source, and drives a real WKWebView. It checks Appearance, route, thread, layout, reading fraction and companion Full/Off choices through a page reload and a second executable process at a different loopback port. Homes and preference suites are disposable; no app is installed, provider activated, model invoked, or live core contacted. Pet XP is explicitly synthetic fixture data, not evidence of ledger verification. The core pet verification tests remain separate.
+The harness compiles the actual app controller and uses its HTTP verification and page-start preference injection. It serves the real web assets and API against a fixture core in WKWebView. Homes and preference stores are disposable. No app is installed and no live core, provider or model is used.
 
-The local web regression subset (desktop preferences, pet, recovery, shell, chat, chat-view and model-command files) passed 80 tests. The full exo-command suite then passed 480 tests in 151.96 seconds on `a1d6b16a186cf8f834f759df00973276f0305f9e`; the native helper-discovery/doc successor `3289e235b45af30057066cd9c0127f97661d49c3` retained identical web source and test subtrees. The later #932 composition adds only the cached-provider retry source path and its two browser cases; provider checks and composed native acceptance are rerun on that final tree. Successful fixture teardown can still emit pending `WebServer._client` task warnings. Native dialog acceptance separately dispatches Return/Escape to the temporary sheet and checks stale-context refusal. VoiceOver acceptance remains unperformed.
+## Evidence
+
+The full exo-command suite passed 480 tests in 151.96 seconds on `a1d6b16a186cf8f834f759df00973276f0305f9e`. Later changes affect provider retry, conversation restoration and native context checks. Their focused checks are separate from that earlier full run.
+
+The preference, provider and companion-selection checks passed 36 focused tests. Native checks cover two processes, separate local ports, page reload and preservation after an initial list failure. Return and Escape cancel the native dialog. Changed page context refuses Continue.
+
+The native context test uses embedded app metadata. The intended context enables restoration. A changed home, explicit executable override or missing bundled launcher refuses it. A PATH fixture verifies that launcher generation fixes the executable before a later launch from another directory.
+
+The companion's growth values are synthetic. Ledger verification and VoiceOver acceptance remain separate. Successful fixture teardown can still emit pending `WebServer._client` task warnings.
