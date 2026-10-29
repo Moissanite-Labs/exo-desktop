@@ -1026,6 +1026,10 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   still binds.
 
 ### Security
+- certifi is now 2026.10.23 in the frozen lock, as in exo #937, for
+  [GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2). Its bundle drops the affected
+  `emSign ECC Root CA - G3` root, along with `emSign ECC Root CA - C3` and `emSign Root CA - C1`. Existing
+  environments and packaged apps need a dependency refresh or a rebuild to get the new bundle.
 - Gate (#471, D-038 amendment): a quoted prefix assignment no longer hides the command after it. Bash reads
   `X='a b' cmd`, `X="a b" cmd` and `X=a\ b cmd` as an assignment and runs `cmd`, but the gate read the quoted word
   as the program, an unknown one, and never read `cmd`. Beside a push that logs, that unknown program's ask was
