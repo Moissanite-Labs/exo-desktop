@@ -80,7 +80,8 @@ each re-run warns that Exo did not install it. Details: `docs/INSTALL.md` step 5
 ## 2. The two clients
 
 The web chat status strip wraps to fit the conversation width in either layout. Model names and values remain
-readable as the window narrows; notices appear on their own wrapped row.
+readable as the window narrows; notices appear on their own wrapped row. In a short window, scroll the chat column
+to reach the status, message box and thread.
 
 Both clients speak the same protocol to the same core. Use either, or both at once.
 
@@ -145,6 +146,11 @@ view. A pending send lets you keep writing and blocks duplicate Enter submission
 your text remains recoverable in that thread without replacing newer edits. Check the transcript before
 sending again; a lost reply may still have reached the core. Reloading or closing the page discards drafts.
 See [conversation drafts](ui/WEB.md#conversation-drafts-and-unconfirmed-sends-d-045).
+
+Find a conversation searches the loaded titles, IDs and agent names. Use the status selector to show
+working conversations or those waiting for an approval. It does not search message contents. Show latest
+messages returns to the newest message when you have scrolled away. Appearance offers Dark, Light or
+System; that preference is saved in this browser. Back and Forward move between the web views.
 
 ## 3. Slash commands
 
@@ -369,7 +375,8 @@ What the gate asks about, and why:
   it cannot read asks instead (#208, above).
 - **Code the gate cannot see into asks (D-038).** A script file, `python -c`, `node -e`, a heredoc fed to a shell,
   `make`, `npm run` or `npm test`, `npx`, `xargs`, `find -exec`, a variable or `$( )` in the program's place, a shell
-  function, `source`, or a program the gate does not know: each asks once, for that exact command. Read the whole
+  function, `source`, or a program the gate does not know: each asks once, for that exact command, also beside a
+  push or post that would only log (#471). Read the whole
   command before you allow it: the card names only the most severe part of the line, and approving runs all of it,
   including code the gate could not see into. Plain work still
   runs: `pytest`, `uv run pytest`, `git status`, `ls`, `rg`, `npm install`, `cargo test` and the like. These are
@@ -487,7 +494,8 @@ Details: `docs/GATE.md`.
 
 Peers are other live sessions on the machine: Exo sessions, Hermes agents and bus seats.
 
-- `/peers` lists them. `/send <peer> <text>` sends a message from you.
+- `/peers` lists them. `/send <peer> <text>` sends a message from you. Malformed discovery records
+  are ignored and removed during normal discovery so other live peers remain available.
 - An agent can message a peer with its `peer_send` tool.
 - Your own sessions deliver at once. A message from another person, or from a bus seat, is held until you allow it.
   A held message that nobody answers expires after 30 minutes.
@@ -539,6 +547,7 @@ folder is not inside a git repo.
 - `/trace` shows one row per turn: time, model that served, calls, fallbacks, tools, tokens and cost.
 - `exo trace [SESSION] [--last N] [--calls] [--json]` shows the same from a shell.
 - `/findings` and `exo findings` list problems Exo found in its own work, such as a slow turn or a model fallback.
+- `exo findings backlog [--limit N] [--json]` counts the unresolved ones by severity and by age, and lists the oldest.
 
 Details and the cost rules: `docs/TRACE.md`.
 

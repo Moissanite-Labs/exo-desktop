@@ -1,0 +1,81 @@
+diff --git a/plugins/exo-command/exo_command/static/style.css b/plugins/exo-command/exo_command/static/style.css
+index 4e8cb4f2..8ff986da 100644
+--- a/plugins/exo-command/exo_command/static/style.css
++++ b/plugins/exo-command/exo_command/static/style.css
+@@ -284,6 +284,11 @@ body { margin: 0; background: #08090a; }
+ .xc-pb { color: var(--fg-2); font-size: 13px; overflow-wrap: anywhere; }
+ .xc-gate { border-left-color: var(--accent); }
+ .xc-gate .xc-ph { color: var(--accent); }
++.xc-approval-help { margin-top: 10px; font-size: 13px; color: var(--fg-2); }
++.xc-approval-focused { display: none; }
++.xc-gate:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
++.xc-gate:focus-within .xc-approval-unfocused { display: none; }
++.xc-gate:focus-within .xc-approval-focused { display: inline; color: var(--accent); font-weight: 600; }
+ .xc-peer { border-left-color: var(--fg-3); background: var(--bg-3); }
+ .xc-log > .xc-pn { margin-left: 24px; }
+ .xc-peer .xc-ph { color: var(--fg-2); }
+@@ -300,15 +305,14 @@ body { margin: 0; background: #08090a; }
+ .xc-tool { font: 12px/1.45 var(--xc-mono); color: var(--fg-2); overflow-wrap: anywhere; }
+ .xc-tool span { color: var(--cold); }
+
+-/* the status strip: instruments, one line, hairline above */
+-.xc-strip { display: flex; align-items: center; flex-wrap: nowrap; overflow: hidden; gap: 0; border-top: 1px solid var(--line); background: var(--bg); font: 500 11px var(--xc-mono); letter-spacing: .06em; color: var(--fg-3); min-height: 32px; }
+-.xc-strip > * { flex: none; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 32px; white-space: nowrap; }
++/* the status strip: wrapping instruments, hairline above */
++.xc-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 0; border-top: 1px solid var(--line); background: var(--bg); font: 500 11px var(--xc-mono); letter-spacing: .06em; color: var(--fg-3); min-height: 32px; }
++.xc-strip > * { flex: none; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 32px; min-width: 0; max-width: 100%; flex-wrap: wrap; white-space: normal; overflow-wrap: anywhere; }
+ .xc-strip > * + * { border-left: 1px solid var(--line); }
+ .xc-strip .xc-i { text-transform: uppercase; font-size: 10px; letter-spacing: .16em; color: var(--fg-3); }
+-.xc-strip .xc-v { color: var(--fg); text-transform: none; letter-spacing: 0; }
++.xc-strip .xc-v { min-width: 0; max-width: 100%; color: var(--fg); text-transform: none; letter-spacing: 0; }
+ .xc-strip .xc-via { color: var(--accent); }
+-.xc-strip .xc-model { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+-.xc-strip .xc-model .xc-v { overflow: hidden; text-overflow: ellipsis; min-width: 12ch; }
++.xc-strip .xc-model { min-width: min(100%, 24ch); flex: 0 1 auto; }
+ .xc-strip .xc-model .xc-via { flex: none; }
+ .xc-ready { padding-left: 0; }
+ .xc-state { color: var(--fg-2); text-transform: uppercase; letter-spacing: .16em; font-size: 10px; }
+@@ -317,7 +321,7 @@ body { margin: 0; background: #08090a; }
+ .xc-gauge i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--cold); transition: width .6s var(--ease); }
+ .xc-gauge.hot i { background: var(--accent); }
+ .xc-strip .xc-wire { flex: 1 1 60px; min-width: 60px; padding: 0; border-left: 1px solid var(--line); }
+-.xc-flash { color: var(--accent-2); overflow-wrap: anywhere; white-space: normal; margin-left: auto; }
++.xc-strip .xc-flash { flex: 1 1 100%; margin-left: 0; border-left: 0; color: var(--accent-2); overflow-wrap: anywhere; white-space: normal; }
+ .xc-spacer { flex: 1; border: 0 !important; padding: 0 !important; }
+
+ /* the composer */
+@@ -793,3 +797,34 @@ body { margin: 0; background: #08090a; }
+ .xc-md [data-align="right"] { text-align: right; }
+ .xc-md .xc-code { white-space: pre; max-width: 100%; overflow-x: auto; }
+ .xc-table-cell { min-width: 6rem; max-width: 28rem; overflow-wrap: anywhere; white-space: normal; }
++
++/* Searchable model routes: full route remains visible even when names overlap. */
++.xc-search-model-picker { width: 100%; min-width: 0; display: grid; gap: 8px; }
++.xc-search-model-picker label { display: grid; gap: 6px; }
++.xc-model-options { max-height: 260px; overflow-y: auto; border: 1px solid var(--line); }
++.xc-model-options:empty { display: none; }
++.xc-model-option { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: inherit; text-align: left; cursor: pointer; }
++.xc-model-option.active, .xc-model-option:hover { background: var(--xc-raise); outline: 1px solid currentColor; outline-offset: -1px; }
++.xc-model-name { font-weight: 600; }
++.xc-model-route { font: 12px var(--xc-mono); opacity: .8; overflow-wrap: anywhere; }
++.xc-model-status, .xc-model-note { margin: 0; font-size: 12px; opacity: .8; }
++.xc-prov-def > .xc-search-model-picker { flex: 1; }
++
++.xc-model-current { margin-left: 8px; font-size: 10px; font-weight: 400; text-transform: uppercase; opacity: .7; }
++
++/* Unsent intent recovery shares the composer's full width. */
++.xc-composer:has(.xc-draft-recovery:not(:empty)) { flex-wrap: wrap; }
++.xc-draft-recovery { flex-basis: 100%; color: var(--fg-2); font-size: 12px; }
++.xc-draft-recovery:empty { display: none; }
++.xc-draft-failed { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
++.xc-draft-failed > span { flex: 1; min-width: 180px; }
++
++/* Keep rename controls outside the thread-selection button. */
++.xc-session-row { display: flex; align-items: center; min-width: 0; }
++.xc-session-row .xc-sess { flex: 1; min-width: 0; }
++.xc-rename { flex-shrink: 0; padding: 5px; font-size: 11px; }
++.xc-rename-editor { padding: 8px; border: 1px solid var(--line-2); }
++.xc-rename-editor[hidden] { display: none; }
++.xc-rename-editor label { display: flex; flex-direction: column; gap: 4px; }
++.xc-rename-editor input { min-width: 0; width: 100%; box-sizing: border-box; }
++.xc-rename-error { color: var(--fg-2); font-size: 12px; overflow-wrap: anywhere; }

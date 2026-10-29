@@ -53,11 +53,13 @@ python3 clients/desktop/macos/prepare-web-overlay.py \
   --output /path/to/new-desktop-plugins
 ```
 
-This copies the selected plugins and replaces only `exo-command`'s `server.py` and `service.py`. It leaves the running core and original runtime files untouched. Use it only when those two original files match this branch's base version. Fresh page event streams use the recent event cache; saved transcripts still come from the core. Replay waits for the browser to consume each event so a large history cannot fill the web process's output buffer and freeze the app.
+This copies the selected plugins and replaces only `exo-command`'s `server.py` and `service.py`. It leaves the running core and original runtime files untouched. Use it only when those two original files match a checked version: the verified runtime (exo `f9d1e423`) or exo main's `server.py` and `service.py` as of exo `75d72a7f`. The flags below still accept only the verified runtime's assets. Fresh page event streams use the recent event cache; saved transcripts still come from the core. Replay waits for the browser to consume each event so a large history cannot fill the web process's output buffer and freeze the app.
 
 Add `--with-model-picker` to also install the searchable chat and Providers pickers. This option checks the supported asset versions and patches chat without replacing runtime-specific commands. Names, providers and full routes can be searched, including punctuation-free queries such as `gpt6`. Use the arrow keys and Enter to select, or Escape to cancel. Typing alone does not change the model.
 
 Add `--with-approval-shortcuts` to show the approval keyboard path and highlight the focused card. Press Ctrl+F to focus the first approval, then use its shown keys. Always and deny require Enter. This option checks the original approval script and stylesheet before copying the updated assets. It can be combined with `--with-model-picker`.
+
+Both options leave this branch's `style.css` out of the overlay. It is written for this branch's redesigned workspace page, not for the older runtime page. They instead apply `macos/patches/overlay-style.patch` to the checked runtime stylesheet and confirm that the result matches the pinned overlay stylesheet. To check this against the verified runtime, run `python3 clients/desktop/macos/Tests/test_web_overlay.py`. It needs this checkout's git history.
 
 For separate agent GitHub credentials, see [per-seat GitHub authentication](../../docs/GITHUB-AUTH.md). It needs a core version containing that feature. Updating this web overlay alone does not enable it in an older core.
 

@@ -34,7 +34,7 @@ The web view uses a nonpersistent store. Reload starts a new web server, and the
 
 Acceptance:
 
-- Restore the selected thread, chat layout, window size and position after quit/reopen and Reload Page.
+- Restore the selected thread, chat layout, Appearance (the `xc-appearance` choice), window size and position after quit/reopen and Reload Page. Appearance is listed because the web page keeps it in browser storage: the nonpersistent website data store drops it on quit, and the alpha's port 0 request gives each reload a new origin, so a Light or System choice returns to Dark today.
 - Restore a useful position in an existing transcript where practical. Handle a removed thread by returning to the thread picker.
 - Save only the interface preferences needed for restoration. Keep the page access token out of persisted preferences and diagnostic output.
 - Keep saved conversations and memory in the core. Verify restoration across changing local ports without changing the selected core.

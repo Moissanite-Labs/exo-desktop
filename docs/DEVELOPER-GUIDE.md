@@ -99,6 +99,9 @@ commands. Its collaborators have small interfaces:
 - `engine.approvals` is an `ApprovalDesk` (`src/exo/core/approvals.py`): `ask`, `listing`, `respond` and
   `announce_resolved`, one `Pending` record per open request. Code that needs a human answer calls
   `engine.approvals.ask(...)`. A test that fakes an open request puts a `Pending` in `engine.approvals.open`.
+- Peer discovery rejects non-object JSON and non-integer (including boolean) pids before constructing
+  presence records. `Directory.scan(prune=False)` leaves rejected files in place; normal scans prune them.
+  Unknown signed fields remain in `Directory.entry`'s original document for signature verification.
 - `engine.peers` is the `PeerService` from `exo.peers`, or `None`. `exo.compose` passes
   `attach_peers=exo.peers.attach`. A test that needs peers does the same, then calls `await engine.peers.start(sock)`.
 - `engine.scheduler` is the `Scheduler` from `exo.scheduler`, or `None`. `exo.compose` passes
@@ -450,6 +453,12 @@ Check your prose before you commit docs:
 
 ### Checking a gate change against main
 
+Gate-related pull requests also run `gate-preflight.yml`: the gate plugin suite and the base revision's
+comparator against the composed PR tree, with the JSON differential retained as an artifact. A nonzero
+comparator result fails that job. Hosted execution and branch-protection enforcement remain separate:
+maintainers must make `never-looser` a required check to enforce it at merge. Reviewers still inspect docs and
+explain every intentional lowering; this workflow does not waive the docs rule.
+
 A change to `src/exo/gate.py` must not decide anything lower than main does, unless the change says so (D-038,
 amendment of 2026-10-22). `scripts/gate_diff.py` checks this (#423). Make a worktree of main next to your branch and
 run main's copy of the script on both trees:
@@ -621,6 +630,9 @@ and must be fixed. Resolved errors also fail until their stale entries are remov
     uv run --frozen --all-extras python scripts/check_types.py --update
 
 Review and commit the smaller baseline. `--update` refuses new errors and never expands it. CI never writes it.
+When a local name changes meaning, use a fresh name rather than widening its type. Read-only
+environment parameters accept `Mapping[str, str]`; bind the selected environment to a new local
+instead of assigning `os.environ` back into an optional dictionary parameter (#710).
 `--initialize` creates a first baseline only when the file is absent, for a separately reviewed migration of the
 compiler or check scope. The helper refuses missing dependencies, mismatched settings and malformed or fatal
 compiler output. It uses no disk cache. `--root PATH --baseline PATH` can check another checkout without changing
@@ -849,7 +861,8 @@ a narrower toolset (`BLOCKED_TOOLS` lists what it never gets), and returns one r
 - **Limits** (`Limits` in `delegate.py`): depth 1 (flat), 10 tasks per call, 4 running children at once, 24 tool
   rounds, 200,000 tokens and 900 seconds per child. Cancelling the parent's tool call interrupts every child.
 - **The wire.** Check or read a packet with `exo wire check` and `exo wire render` (`docs/COMMANDS.md`). Models only
-  ever read the English form.
+  ever read the English form. In code, pin the signer's key: `exo.wire.verify(line, sig, trusted_pub)` returns
+  False without one, because the key a signature carries proves nothing (D-016 amendment).
 - **Control (D-070).** The built-in `command.run` name `subagent` has the verbs `list`, `open`, `send` and `stop`, and
   lives in `src/exo/subagents.py`. Through this built-in only the principal may act: `command()` calls `steer` and
   `stop` without `by`, so the parent-session path (`by=<parent session id>`, which speaks as `delegate`, D-040) is
