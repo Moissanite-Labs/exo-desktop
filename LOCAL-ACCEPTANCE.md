@@ -11,6 +11,7 @@ This branch tests desktop integration with pending shared changes. It does not u
 | Native confirmations | `923860a6a8dd1dd0f1ff530b0562c929e84d4350` |
 | Web preferences | `1103f530ea8e1acd58caf817addfddccc299a591` |
 | Cached-provider retry | `d32b6d2f624cd1a562c3ec2919afbc53b4535bb8` |
+| Certificate lock repair | `568b903fc45984052b888636ef53647c2a10a38f` |
 | Companion | `d911b390e989d1bbb33bc7c3fce3e2094f9ff5a9` |
 
 ## Reproduce on a Mac graphical session
@@ -35,3 +36,5 @@ The preference, provider and companion-selection checks passed 36 focused tests.
 The native context test uses embedded app metadata. The intended context enables restoration. A changed home, explicit executable override or missing bundled launcher refuses it. A PATH fixture verifies that launcher generation fixes the executable before a later launch from another directory.
 
 The companion's growth values are synthetic. Ledger verification and VoiceOver acceptance remain separate. Successful fixture teardown can still emit pending `WebServer._client` task warnings.
+
+The lock selects certifi 2026.10.23. Tests use the existing Python environment with certifi 2026.7.22, so TLS bundle validation is separate. No active environment was updated.
