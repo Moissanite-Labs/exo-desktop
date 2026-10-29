@@ -87,8 +87,11 @@ testDelegate.acceptance(URL(string:CommandLine.arguments[1])!)
         [
             "swiftc",
             str(p / "main.swift"),
-            str(root / "Sources/ExoDesktop/ExoWebLauncher.swift"),
-            str(root / "Sources/ExoDesktop/NativeDialogPolicy.swift"),
+            *[
+                str(path)
+                for path in sorted((root / "Sources/ExoDesktop").glob("*.swift"))
+                if path.name != "main.swift"
+            ],
             "-framework",
             "AppKit",
             "-framework",
