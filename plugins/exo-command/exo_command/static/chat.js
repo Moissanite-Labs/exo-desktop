@@ -26,7 +26,7 @@ function draft(id) {
 export function mount(root, { pet = null } = {}) {
   let mounted = true, navigation = 0, homeRevision = 0;
   const savedThread = desktopPreference("thread"), savedScroll = desktopPreference("scroll");
-  let pendingReading = null, transcriptLoaded = false;
+  let pendingReading = null, transcriptLoaded = false, initialSelectionPending = true;
   function saveReading() {
     if (mounted && current && !loading && transcriptLoaded) saveDesktopPreferences({ thread: current, scroll: logEl.scrollHeight > logEl.clientHeight ? Math.min(1, Math.max(0, logEl.scrollTop / (logEl.scrollHeight - logEl.clientHeight))) : 0 });
   }
@@ -607,8 +607,10 @@ export function mount(root, { pet = null } = {}) {
     const asked = ++listAsked;
     try {
       const fresh = (await api("GET", "/api/chat/sessions")).sessions;
+      if (!Array.isArray(fresh)) throw Error("The conversation list could not be read.");
       if (asked > listShown) { listShown = asked; sessions = fresh; drawSessions(); }
-    } catch (e) { fail(e); }
+      return true;
+    } catch (e) { fail(e); return false; }
   }
 
   function chooseConversation(id) {
@@ -668,11 +670,14 @@ export function mount(root, { pet = null } = {}) {
     if (pet) pet.selectSession(current);
     const id = current, generation = ++snapshotGeneration, cutoff = bus.lastSeq(), had = Object.keys(steers), asked = ++listAsked;
     loading = true;
+    let listReady = false;
     try {
-      const freshSessions = (await api("GET", "/api/chat/sessions")).sessions || [];
+      const freshSessions = (await api("GET", "/api/chat/sessions")).sessions;
+      if (!Array.isArray(freshSessions)) throw Error("The conversation list could not be read.");
       const d = id ? await api("GET", "/api/chat/sessions/" + encodeURIComponent(id)) : null;
       if (id !== current || generation !== snapshotGeneration) return;
       if (asked > listShown) { listShown = asked; sessions = freshSessions; }
+      listReady = true;
       if (d) {
         items = mergeTranscript(fromMessages(d.messages || []), items);
         transcriptLoaded = true;
@@ -692,6 +697,7 @@ export function mount(root, { pet = null } = {}) {
         syncApprovals(); loadContext();
         if (reading !== null) { ++homeRevision; logEl.scrollTop = reading; updateLatest(); saveReading(); }
         restoreReading(id, generation);
+        finishInitialSelection(listReady);
       }
     }
   }
@@ -967,15 +973,19 @@ export function mount(root, { pet = null } = {}) {
   restoreDraft();
   if (hasDesktopPreferences()) window.addEventListener("pagehide", saveReading);
   const startingNavigation = navigation;
-  refreshSessions().then(() => {
-    if (!mounted || current || navigation !== startingNavigation) return;
-    if (asked) { open(asked); return; }
+  function finishInitialSelection(listReady) {
+    // A failed read is not evidence that the saved conversation disappeared. A later reconnect may retry.
+    if (!initialSelectionPending || !mounted || current || navigation !== startingNavigation) return;
+    if (asked) { initialSelectionPending = false; open(asked); return; }
+    if (!listReady) return;
+    initialSelectionPending = false;
     if (draft(null).text || draft(null).pending) return;
     if (hasDesktopPreferences()) {
       if (savedThread && sessions.some(s => s.id === savedThread)) open(savedThread, savedScroll);
       else saveDesktopPreferences({ thread: null, scroll: null });
     } else if (sessions.length) open(sessions.some(s => s.id === lastThread) ? lastThread : sessions[0].id);
-  });
+  }
+  refreshSessions().then(finishInitialSelection);
   return off;
 }
 
