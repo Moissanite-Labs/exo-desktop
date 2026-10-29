@@ -37,18 +37,45 @@ export function mount(root) {
   }
 
   const results = {};   // provider name -> {text, cls}; kept across redraws, never holds a key
-  let data = null, models = null, err = "", picked = "", modelsError = "", savingDefault = false, loadGeneration = 0;
+  let data = null, models = null, modelsError = null, modelsLoading = false, err = "", picked = "", savingDefault = false;
+  let loadGeneration = 0, modelsGeneration = 0;
+
+  // D-091: a failed model list says which failure it was. A transport failure can be retried; an authority
+  // refusal cannot, so it gets no button. A failed retry keeps the last good list, so the picker stays usable.
+  // Each read takes a generation; only the newest one may change the list, so a slow read never overwrites a newer one.
+  async function loadModels() {
+    const generation = ++modelsGeneration;
+    let next = null, failure = null;
+    try {
+      const d = await api("GET", "/api/providers/models");
+      if (d && d.error) failure = { text: d.error, cls: d.error_class || "other", retryable: d.retryable !== false };
+      else next = d;
+    } catch (e) {
+      failure = { text: e.message || "The model list could not be read.", cls: "other", retryable: true };
+    }
+    if (!alive || generation !== modelsGeneration) return;
+    modelsLoading = false;
+    if (failure) modelsError = failure;
+    else { models = next; modelsError = null; }
+  }
 
   async function load() {
     const generation = ++loadGeneration;
     try {
       const next = await api("GET", "/api/providers");
-      let nextModels = null, nextError = "";
-      try { nextModels = await api("GET", "/api/providers/models"); } catch (e) { nextError = e.message || "Models could not be loaded."; }
+      await loadModels();
       if (!alive || generation !== loadGeneration) return;
-      data = next; models = nextModels; modelsError = nextError; err = "";
+      data = next; err = "";
     } catch (e) { if (generation === loadGeneration) err = e.message; }
     if (alive && generation === loadGeneration) draw();
+  }
+
+  async function retryModels() {
+    if (!alive || modelsLoading) return;
+    modelsLoading = true; modelsError = null;
+    draw();
+    await loadModels();
+    if (alive) draw();
   }
 
   function show(name, text, cls) { results[name] = { text, cls }; if (alive) draw(); }
@@ -129,11 +156,16 @@ export function mount(root) {
 
   function picker() {
     const rows = [...((models && models.models) || []), ...((models && models.available) || [])];
-    const chosen = createModelPicker({ label: "Default model", rows: modelsError ? [] : rows, selected: picked,
+    // D-091: with no good list the picker says why it failed; with one it stays usable and is marked as the last good read.
+    const failed = !!modelsError && !rows.length;
+    const chosen = createModelPicker({ label: "Default model", rows: modelsLoading ? null : rows, selected: picked,
       applyLabel: "Save default", note: "The route the main role calls first.", onApply: saveDefault });
-    if (modelsError) chosen.setError(modelsError + " Reopen Providers to retry.");
+    if (failed) chosen.setError(modelsError.text);
     const res = results._default;
     return h("section", { class: "xc-prov-def", "aria-label": "Default model" }, chosen.element,
+      failed && modelsError.retryable ? h("div", { class: "xc-btnrow" },
+        h("button", { class: "xc-btn", type: "button", onclick: retryModels }, "Try again")) : null,
+      modelsError && !failed ? h("div", { class: "xc-warn", role: "status" }, modelsError.text + " This list is from the last good read.") : null,
       res ? h("div", { class: "xc-prov-res " + (res.cls || ""), role: "status" }, res.text) : null);
   }
 
