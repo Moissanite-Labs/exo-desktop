@@ -273,6 +273,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return true
     }
 
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        guard webView === self.webView, !transitioning, !terminating, let window,
+              NativeDialogPolicy.allows(origin: origin, frameURL: frame.request.url,
+                                        isMainFrame: frame.isMainFrame) else {
+            completionHandler(false)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Confirm action"
+        alert.informativeText = String(message.prefix(4000))
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Continue")
+        // Make Return explicitly choose the non-destructive action.
+        alert.buttons[0].keyEquivalent = "\r"
+        // AppKit consumes the Cancel button's Escape equivalent when it becomes the
+        // Return default. Handle Escape only for this sheet, for its lifetime.
+        var escapeMonitor: Any?
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak alert] event in
+            guard let alert, event.window === alert.window, event.keyCode == 53,
+                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+            alert.buttons[0].performClick(nil)
+            return nil
+        }
+        alert.beginSheetModal(for: window) { result in
+            if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor) }
+            completionHandler(result == .alertSecondButtonReturn)
+        }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        guard webView === self.webView, !transitioning, !terminating, let window,
+              NativeDialogPolicy.allows(origin: origin, frameURL: frame.request.url,
+                                        isMainFrame: frame.isMainFrame) else {
+            completionHandler()
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Exo"
+        alert.informativeText = String(message.prefix(4000))
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window) { _ in completionHandler() }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard let origin, let current = webView.url,
               current.scheme == origin.scheme, current.host == origin.host, current.port == origin.port else { return }
