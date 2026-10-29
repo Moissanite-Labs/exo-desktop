@@ -49,6 +49,9 @@ extension AppDelegate {
    print("PASS native confirm \\(title) expected \\(expected)")
   }
   confirm("Cancel",expected:false); confirm("Continue",expected:true)
+  self.transitioning=true
+  confirm("restart pending",expected:false,allowed:false)
+  self.transitioning=false
   self.origin=URL(string:"http://127.0.0.1:1/")!
   confirm("wrong origin",expected:false,allowed:false)
   self.origin=url
