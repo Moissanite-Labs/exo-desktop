@@ -215,12 +215,18 @@ def test_providers_next_start_reply_is_not_shown_as_applied_now(page):
 
 
 def mount_providers_with_model_reads(page, replies):
-    """Mount the Providers view; each /api/providers/models read answers with the next reply in turn."""
+    """Mount the Providers view; each /api/providers/models read answers with the next reply in turn.
+
+    A reply written as {held: reply} answers only when the test calls releaseHeld().
+    """
     page.eval(r'''(async()=>{
       window.modelReplies=''' + replies + r'''; window.modelReads=0;
       window.fetch=async (path,opt={})=>{
         let data={};
-        if(path.endsWith('/models'))data=modelReplies[Math.min(modelReads++,modelReplies.length-1)];
+        if(path.endsWith('/models')){
+          data=modelReplies[Math.min(modelReads++,modelReplies.length-1)];
+          if(data.held){const reply=data.held; await new Promise(r=>{window.releaseHeld=r;}); data=reply;}
+        }
         else if(path==='/api/providers')data={providers:[{provider:'local',needs:'cli',ready:true}],ready:true};
         else if(path.endsWith('/test'))data={ok:true,latency_ms:1};
         return {ok:true,status:200,json:async()=>data};
@@ -267,3 +273,24 @@ def test_providers_failed_reread_keeps_the_last_good_list(page):
     assert page.eval('document.querySelector(".xc-prov-def .xc-warn").textContent') == (
         "Exo core is not reachable. This list is from the last good read.")
     assert page.eval('document.querySelectorAll("[role=option]").length') == 2 and page.eval(TRY_AGAIN) == 0
+
+
+def test_providers_slow_failed_read_cannot_overwrite_a_newer_good_list(page):
+    """A failed model read that answers after a newer good read changes nothing: no last-good warning appears."""
+    good = "{models:[{route:'alpha:sonnet',name:'Sonnet'}],available:[{route:'beta:sonnet',name:'Sonnet'}]}"
+    mount_providers_with_model_reads(page, '[' + good + ',{held:' + DOWN + '},' + good + ']')
+    page.wait('document.querySelectorAll("[role=option]").length === 2')
+    click_button(page, 'Test')   # read 2 is held, and fails when released
+    page.wait('modelReads === 2 && typeof releaseHeld === "function"')
+    click_button(page, 'Test')   # read 3 is newer and answers at once
+    page.wait('modelReads === 3 && document.querySelector(".xc-prov-res").textContent.startsWith("Test ok")')
+    page.eval('new Promise(r=>setTimeout(r,0))')
+    assert page.eval('!!document.querySelector(".xc-prov-def .xc-warn")') is False
+    # Release the stale failure, then redraw at once: a provider test draws "Testing..." before it reads again.
+    shown = page.eval('''(async()=>{
+      releaseHeld(); await new Promise(r=>setTimeout(r,0));
+      [...document.querySelectorAll("button")].find(b=>b.textContent==="Test").click();
+      return [!!document.querySelector(".xc-prov-def .xc-warn"), document.querySelectorAll("[role=option]").length,
+              document.querySelector(".xc-prov-res").textContent];
+    })()''')
+    assert shown == [False, 2, 'Testing...']
