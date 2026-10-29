@@ -171,6 +171,8 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   calls, 173 before (+48%). Tests: `tests/eval/test_eval_climb.py`, `tests/learn/test_learn_nightly.py`.
   **Docs:** `docs/LEARNING.md` "The slow loop", `DECISIONS.md` (D-012).
 
+- Git gc.recentObjectsHook is read as shell execution across git configuration forms, preserving policy denies on its nested command (#473).
+
 - The core retries its start after a failed or cancelled start instead of failing every later command
   (exo-desktop #14, orda-aska). The provider readiness probe that runs when no main role is configured could
   raise once and leave every later command with the same `internal` error until exod restarted. A start cut
@@ -178,6 +180,15 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   always closes MCP. Tests:
   `tests/integration/test_engine_start_retry.py`. **Docs:** `DECISIONS.md` D-010, `docs/CORE-V2-INTERFACES.md`
   "Protocol".
+
+- Malformed peer presence records no longer break discovery or hide other live peers (#638).
+
+- Encrypted group envelopes for another seat and unreadable encrypted bodies no longer create placeholder bus turns; the inbox cursor still advances (desktop audit #53).
+
+- The pinned type baseline matches again after separating reused gate locals and typing terminal
+  restart environments as read-only mappings; nine resolved diagnostics are removed (#710).
+
+- Repeated corrections and rulings no longer reinforce rejected beliefs. New agreeing evidence creates a separate proposal for review while preserving the rejection (desktop audit #54).
 
 - JSON beyond the decoder nesting limit in web approval, chat and provider POSTs returns the existing
   400 JSON input error instead of closing the connection without a response (follow-up to #751).

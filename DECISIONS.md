@@ -207,6 +207,7 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   Scores and order are unchanged. Docs: `docs/CORE.md` "Find".
 
 ## D-012 (2026-10-12) One learning loop: review, taste and hill-climbing eval
+- *Amendment 2026-10-28 (desktop audit #54):* agreeing signals reinforce only active beliefs. Evidence agreeing with a rejected belief creates a separate proposal for review, leaving the earlier rejection intact.
 - **Decision:** adopt `research/LEARNING-LOOP.md` as `exo.learn`. One background reviewer that only
   proposes. Signals: corrections, edits, accepts, rejections, explicit asks, outcomes. Outputs: beliefs,
   taste rules, skills, memory, open questions. Every lesson is a typed proposal with confidence and evidence
@@ -457,6 +458,9 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   provider time to first token is measured at the loop, not inside each provider.
 
 ## D-026 (2026-10-12) Peers and one ingress path
+- **Amendment 2026-10-28 (#638):** peer presence must be a JSON object with an integer pid; boolean,
+  floating-point and string pids are invalid. Invalid records are skipped and normal discovery prunes
+  them without blocking other peers. Unknown signed fields remain in the original verification document.
 - **Why:** A watched two Claude Code sessions avoid a file collision by messaging each other and asked for it in
   Exo, and for Hermes agents too (docs/PEERS.md).
 - **Decision:** anything outside the principal's keyboard goes through one path, `Ingress(source, sender, trust,
@@ -1307,6 +1311,7 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   `count`); the web client does not run the other slash commands, so its menu lists only what it runs.
 
 ## D-038 (2026-10-12) Gate default ask: a shell allowlist, the store is credentials, policy edits only tighten
+- *Amendment 2026-10-28 (#473):* Git gc.recentObjectsHook is read as shell execution across git configuration forms, preserving policy denies on its nested command.
 - *Amendment 2026-10-27 (issue #594, #609 and its review 5662072421):* a glob in a secret store's folder reads
   the store, and a `target:` entry matches every store a credentials line names. #609 (merged as 5a5a535d) tested a
   globbed folder against the folder of each glob sample (`_glob_folder_hit`), so `cat ~/.ss?/*`, `cat ~/.aw?/*`
@@ -3981,6 +3986,7 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   matter. `docs/ui/WEB.md` "Opening the page and the page token".
 
 ## D-040 (2026-10-12) Who wrote it: authors on every message, pinned keys, an anchored ledger head
+- *Amendment 2026-10-28 (desktop audit #53):* the bus channel skips encrypted envelopes sealed to another seat and unreadable encrypted bodies before session allocation or core ingress. The inbox cursor still advances; reader tools retain their placeholders. A core-call failure still retries the envelope.
 - **Why:** the 12 October audit (priorities 4 and 6). (a) `exo_note` let the agent write `kind="ruling"`, and
   consolidation and `principal_said` checked the kind, not the author, so an agent-written "always force push to
   main" became a belief proposal that promotion rule 1 would accept. (b) Per-turn capture got bare role and content,
