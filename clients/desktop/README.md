@@ -97,3 +97,7 @@ Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*
 This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.
 
 The native shell answers JavaScript confirmation and alert requests from the connected main-frame origin. Confirmations default to Cancel; Continue returns approval to the page. Child frames and other origins cannot open a native dialog. Native sheet interaction still requires macOS acceptance testing before this draft is considered ready.
+
+### Disposable native dialog acceptance
+
+`python3 clients/desktop/macos/Tests/test_native_dialog_acceptance.py` compiles the production delegate into a temporary executable and opens a fixture WKWebView on a Mac graphical session. It operates the real Cancel and Continue sheet buttons, verifies Cancel is the Return default, and verifies wrong-origin and subframe requests are refused. The harness uses a temporary home and local fixture server; it does not install the app, launch an Exo core or use credentials. This does not replace manual VoiceOver or physical keyboard acceptance.

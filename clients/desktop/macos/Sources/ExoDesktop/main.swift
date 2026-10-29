@@ -250,6 +250,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         alert.informativeText = String(message.prefix(4000))
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Continue")
+        // Cancel has Escape semantics; make Return equally safe and predictable.
+        alert.buttons[0].keyEquivalent = "\r"
         alert.beginSheetModal(for: window) { result in
             completionHandler(result == .alertSecondButtonReturn)
         }
