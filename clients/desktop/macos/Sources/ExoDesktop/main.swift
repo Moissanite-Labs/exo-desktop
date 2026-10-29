@@ -218,6 +218,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !terminating else { return .terminateLater }
+        let alert = NSAlert()
+        alert.messageText = "Quit and keep agent work running?"
+        alert.informativeText = "Quitting closes this desktop window and its web connection. It does not stop the shared core or pause any session. Active agent work may continue making paid model calls. Keep the window open and cancel a turn in Chat if you want it to stop."
+        alert.addButton(withTitle: "Keep Open")
+        alert.addButton(withTitle: "Quit and Keep Running")
+        guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         // Stops the web server first, then allows termination. The core
         // keeps running, as with `exo web`.
         terminating = true
