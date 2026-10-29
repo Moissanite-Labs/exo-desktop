@@ -24,9 +24,13 @@ Only `view`, `thread`, `layout`, `appearance`, `petMode` and a transcript `scrol
 `window.webkit.messageHandlers.exoDesktop.postMessage`. Thread IDs accept letters, digits, underscores and
 hyphens up to 200 characters; scroll is a finite fraction from zero to one. Null clears thread and scroll.
 No token, prompt, draft, transcript or model response enters this channel. An explicit URL view or Tasks
-Open request takes priority over the restored view/thread. A saved thread absent from the loaded list leaves
-the chooser open. A failed list or transcript read preserves the saved thread and fraction; a successful
-reconnect can finish the initial restore. Thread changes clear the old scroll fraction. Snapshot and navigation checks prevent a late
+Open request takes priority over the restored view/thread. The conversation list is bounded, so restoration fetches the saved thread directly and keeps its returned
+metadata visible in the chooser. Only an exact session 404 clears the saved pointer and leaves the chooser
+open. A failed list or other failed transcript read preserves the saved thread and fraction; a successful
+reconnect can finish the initial restore. Restoration uses the ordinary conversation-open event buffer, so
+live messages and tool state arriving during the snapshot read are reconciled afterward. A reconnect
+waits for an active open to finish; queued recovery belongs to that selection and is discarded on navigation
+or unmount. Thread changes clear the old scroll fraction. Snapshot and navigation checks prevent a late
 saved-thread response from changing a newer selection, and unmount cancels restoration.
 
 ## Conversation drafts and unconfirmed sends (D-045)

@@ -5,6 +5,7 @@ import json
 import pytest
 from browser import Browser, Served, find_chrome
 from test_layout_web import ThreadSrc
+from exo_command.source import SourceError
 
 pytestmark = pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
 
@@ -32,7 +33,12 @@ def test_native_values_override_browser_storage_and_explicit_view_wins():
 
 
 def test_missing_native_thread_does_not_silently_open_latest():
-    srv = Served(ThreadSrc(pairs=3))
+    class MissingThread(ThreadSrc):
+        async def call(self, body):
+            if type(body).TYPE == 'session.get' and body.session == 'missing':
+                raise SourceError('not_found', 'Synthetic missing conversation')
+            return await super().call(body)
+    srv = Served(MissingThread(pairs=3))
     try:
         with Browser() as b:
             inject(b, {'view': 'chat', 'thread': 'missing', 'scroll': .6})
@@ -226,5 +232,161 @@ def test_explicit_tasks_open_survives_initial_list_failure():
             b.wait("document.querySelectorAll('.xc-msg').length>100")
             assert b.eval("savedPrefs.some(p=>p.thread==='s2' && p.scroll===null)")
             assert not b.eval("savedPrefs.some(p=>p.thread===null)")
+    finally:
+        srv.close()
+
+
+def test_early_pet_mode_change_is_forwarded_during_held_bootstrap():
+    srv = Served(ThreadSrc(pairs=0))
+    try:
+        with Browser() as b:
+            inject(b, {'petMode': 'mini'})
+            b.call('Page.addScriptToEvaluateOnNewDocument', source="const realFetch=window.fetch;window.releasePanels=null;window.fetch=(url,...args)=>String(url).endsWith('/api/chat/panels')?new Promise(resolve=>releasePanels=()=>realFetch(url,...args).then(resolve)):realFetch(url,...args);")
+            b.goto(srv.url())
+            b.wait("!!releasePanels && !!document.querySelector('.xc-nav')")
+            # The companion module owns its control. A bubbling change must reach the bridge before startup finishes.
+            b.eval("(()=>{const p=document.createElement('select');p.className='xc-pet-mode';for(const v of ['mini','full','off'])p.add(new Option(v,v));p.onchange=()=>localStorage.setItem('xc-pet-mode',p.value);document.querySelector('.xc-nav').append(p);p.value='off';p.dispatchEvent(new Event('change',{bubbles:true}));})()")
+            assert b.eval("localStorage.getItem('xc-pet-mode')") == 'off'
+            assert b.eval("savedPrefs.some(p=>p.petMode==='off')")
+            b.eval('releasePanels()')
+            b.wait("!!document.querySelector('.xc-composer')")
+            assert b.eval("savedPrefs.some(p=>p.petMode==='off')")
+    finally:
+        srv.close()
+
+
+def test_saved_thread_outside_bounded_list_restores_metadata_activity_and_reading():
+    class OlderThread(ThreadSrc):
+        list_reads = 0
+        async def call(self, body):
+            result = await super().call(body)
+            if type(body).TYPE == 'session.list':
+                self.list_reads += 1
+                result['sessions'][0]['title'] = f'Bounded list {self.list_reads}'
+            if type(body).TYPE == 'session.get' and body.session == 's2':
+                result['session'] = {'id': 's2', 'title': 'Older saved conversation', 'agent': 'atlas', 'model': 'm', 'status': 'live'}
+            return result
+    srv = Served(OlderThread(pairs=60))
+    try:
+        with Browser() as b:
+            inject(b, {'thread': 's2', 'layout': 'classic', 'scroll': .37})
+            b.goto(srv.url())
+            b.wait("document.querySelector('.xc-sess.on')?.textContent.includes('Older saved conversation')")
+            b.wait("(()=>{const l=document.querySelector('.xc-log');return Math.abs(l.scrollTop/(l.scrollHeight-l.clientHeight)-.37)<.02;})()")
+            assert b.eval("document.querySelector('.xc-state').textContent.includes('working')")
+            assert not b.eval("savedPrefs.some(p=>p.thread===null)")
+            # A later bounded list refresh must retain the exact session that was restored successfully.
+            before = b.eval("document.querySelector('.xc-sess:not(.on) .xc-sess-title').textContent")
+            srv.call(srv.centre.record, {'seq': 1, 'type': 'session.updated', 'session': 's1', 'body': {}})
+            b.wait("document.querySelector('.xc-sess:not(.on) .xc-sess-title').textContent!==" + json.dumps(before))
+            assert b.eval("document.querySelector('.xc-sess.on').textContent.includes('Older saved conversation')")
+    finally:
+        srv.close()
+
+
+@pytest.mark.parametrize('status', [403, 503])
+def test_omitted_saved_thread_preserves_pointer_when_exact_read_fails(status):
+    srv = Served(ThreadSrc(pairs=60))
+    try:
+        with Browser() as b:
+            inject(b, {'thread': 's2', 'layout': 'classic', 'scroll': .37})
+            b.call('Page.addScriptToEvaluateOnNewDocument', source=f"const realFetch=window.fetch;window.savedReads=0;window.fetch=(url,...args)=>String(url).endsWith('/api/chat/sessions/s2')?(savedReads++,Promise.resolve(new Response(JSON.stringify({{error:'Synthetic saved conversation unavailable'}}),{{status:{status},headers:{{'Content-Type':'application/json'}}}}))):realFetch(url,...args);")
+            b.goto(srv.url())
+            b.wait("savedReads>0 && document.querySelector('.xc-strip').textContent.includes('Synthetic saved conversation unavailable')")
+            assert not b.eval("savedPrefs.some(p=>Object.hasOwn(p,'thread') || Object.hasOwn(p,'scroll'))")
+            assert not b.eval("!!document.querySelector('.xc-sess.on')")
+    finally:
+        srv.close()
+
+
+@pytest.mark.parametrize('layout', ['inverse', 'classic'])
+def test_live_events_during_saved_snapshot_read_are_reconciled(layout):
+    class LiveThread(ThreadSrc):
+        extra = []
+        async def call(self, body):
+            result = await super().call(body)
+            if type(body).TYPE == 'session.get':
+                result['messages'] += list(self.extra)
+            return result
+    src = LiveThread(pairs=3)
+    srv = Served(src)
+    try:
+        with Browser() as b:
+            inject(b, {'thread': 's1', 'layout': layout, 'scroll': .37})
+            b.call('Page.addScriptToEvaluateOnNewDocument', source="const realFetch=window.fetch;window.savedResponses=[];window.savedReleased=false;window.fetch=async(url,...args)=>{const response=await realFetch(url,...args);return String(url).endsWith('/api/chat/sessions/s1')&&!savedReleased?new Promise(resolve=>savedResponses.push(()=>resolve(response))):response;};")
+            b.goto(srv.url())
+            b.wait("savedResponses.length>0")  # the real snapshot has already been captured
+            call = {'id': 'live-tool', 'name': 'read_file', 'arguments': {'path': 'synthetic.txt'}}
+            result = {'call_id': 'live-tool', 'content': [{'type': 'text', 'text': 'UNIQUE_TOOL_RESULT'}]}
+            message = {'id': 'live-message', 'role': 'assistant', 'content': [{'type': 'text', 'text': 'UNIQUE_LIVE_MESSAGE'}]}
+            # Subsequent snapshots represent the same durable records; replay must not duplicate them.
+            src.extra = [{'id': 'tool-message', 'role': 'assistant', 'content': [], 'tool_calls': [call]},
+                         {'id': 'tool-result', 'role': 'tool', 'content': [], 'tool_results': [result]}, message]
+            for seq, kind, body in [(1001, 'turn.started', {'turn_id': 'live-turn', 'model': 'm'}),
+                                    (1002, 'tool.started', {'call': call}),
+                                    (1003, 'tool.output', {'call_id': 'live-tool', 'text': 'UNIQUE_TOOL_RESULT'}),
+                                    (1004, 'tool.completed', {'result': result}),
+                                    (1005, 'message.completed', {'message': message}),
+                                    (1006, 'turn.completed', {'turn_id': 'live-turn', 'stop_reason': 'end'})]:
+                srv.call(srv.centre.record, {'seq': seq, 'type': kind, 'session': 's1', 'body': body})
+            b.wait("import('/static/bus.js').then(bus=>bus.lastSeq()>=1006)")
+            b.eval('savedReleased=true;savedResponses.forEach(release=>release())')
+            b.wait("document.querySelector('.xc-log').textContent.includes('UNIQUE_LIVE_MESSAGE')")
+            assert b.eval("document.querySelector('.xc-log').textContent.split('UNIQUE_LIVE_MESSAGE').length-1") == 1
+            assert b.eval("document.querySelectorAll('.xc-tool-item.xc-ts-done').length") == 1
+            assert b.eval("document.querySelector('.xc-tool-item').textContent.includes('UNIQUE_TOOL_RESULT')")
+            assert b.eval("document.querySelector('.xc-state').textContent.includes('idle')")
+    finally:
+        srv.close()
+
+
+def test_list_404_during_retry_cannot_clear_a_saved_thread_pointer():
+    srv = Served(ThreadSrc(pairs=3))
+    try:
+        with Browser() as b:
+            inject(b, {'thread': 's1', 'layout': 'classic', 'scroll': .37})
+            b.call('Page.addScriptToEvaluateOnNewDocument', source="const realFetch=window.fetch;window.listNotFound=false;window.list404s=0;window.fetch=(url,...args)=>{const path=new URL(url,location.href).pathname;if(path==='/api/chat/sessions'&&listNotFound){list404s++;return Promise.resolve(new Response(JSON.stringify({error:'Synthetic list endpoint missing'}),{status:404,headers:{'Content-Type':'application/json'}}));}if(path==='/api/chat/sessions/s1')return Promise.resolve(new Response(JSON.stringify({error:'Synthetic exact read unavailable'}),{status:503,headers:{'Content-Type':'application/json'}}));return realFetch(url,...args);};")
+            b.goto(srv.url())
+            b.wait("document.querySelector('.xc-strip')?.textContent.includes('Synthetic exact read unavailable')")
+            b.eval("listNotFound=true;import('/static/bus.js').then(bus=>bus.restart())")
+            b.wait("list404s>0 && document.querySelector('.xc-strip').textContent.includes('Synthetic list endpoint missing')")
+            assert not b.eval("savedPrefs.some(p=>Object.hasOwn(p,'thread') || Object.hasOwn(p,'scroll'))")
+    finally:
+        srv.close()
+
+
+@pytest.mark.parametrize('action', ['select', 'unmount'])
+def test_queued_recovery_cannot_escape_its_open_owner(action):
+    class TwoThreads(ThreadSrc):
+        async def call(self, body):
+            if type(body).TYPE == 'session.list':
+                return {'sessions': [{'id': sid, 'title': sid, 'status': 'idle'} for sid in ['s1', 's2']]}
+            return await super().call(body)
+    srv = Served(TwoThreads(pairs=3))
+    try:
+        with Browser() as b:
+            inject(b, {'thread': 's1', 'layout': 'inverse', 'scroll': .6})
+            b.call('Page.addScriptToEvaluateOnNewDocument', source="const realFetch=window.fetch;window.getCounts={};window.savedResponses=[];window.savedReleased=false;window.savedJSONRead=false;window.fetch=async(url,...args)=>{const path=new URL(url,location.href).pathname;if(path.startsWith('/api/chat/sessions/'))getCounts[path]=(getCounts[path]||0)+1;const response=await realFetch(url,...args);if(path!='/api/chat/sessions/s1'||savedReleased)return response;const read=response.json.bind(response);response.json=async()=>{const data=await read();savedJSONRead=true;return data;};return new Promise(resolve=>savedResponses.push(()=>resolve(response)));};")
+            b.goto(srv.url())
+            b.wait('savedResponses.length>0')
+            before = b.eval("import('/static/bus.js').then(bus=>{bus.onState(s=>window.observedSynced=s.synced);return observedSynced;})")
+            b.eval("import('/static/bus.js').then(bus=>bus.restart())")
+            b.wait('observedSynced>' + str(before))
+            assert b.eval("getCounts['/api/chat/sessions/s1']") == 1
+            if action == 'select':
+                b.eval("[...document.querySelectorAll('.xc-sess')].find(x=>x.textContent.startsWith('s2')).click()")
+                b.wait("document.querySelector('.xc-sess.on')?.textContent.startsWith('s2') && document.querySelectorAll('.xc-msg').length>0")
+            else:
+                b.eval("document.querySelector('a[href=\"#tasks\"]').click()")
+                b.wait("document.querySelector('.xc-nav-link[aria-current]')?.textContent==='Tasks'")
+            b.eval('savedReleased=true;savedResponses.forEach(release=>release())')
+            b.wait('savedJSONRead')
+            assert b.eval("getCounts['/api/chat/sessions/s1']") == 1
+            assert not b.eval("savedPrefs.some(p=>p.scroll===.6)")
+            if action == 'select':
+                assert b.eval("getCounts['/api/chat/sessions/s2']") == 1
+                assert b.eval("document.querySelector('.xc-sess.on').textContent.startsWith('s2')")
+            else:
+                assert not b.eval("!!document.querySelector('.xc-log')")
     finally:
         srv.close()
