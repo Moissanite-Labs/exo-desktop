@@ -1,31 +1,33 @@
-# Draft native and workspace integration, 2026-10-29
+# Desktop integration review, 2026-10-29
 
-This is a reviewable composition of merged desktop work and pending canonical changes. It is not release-ready and does not update the official upstream sync pin or install an application.
+This branch combines native confirmations and saved display choices with pending Exo web changes. It is for integration review and is not release-ready. It does not change the official sync pin or install an app.
 
-## Source ownership and exact inputs
+## Sources
 
-| Input | Exact source | State and reconciliation |
+| Input | Exact source | Review and next step |
 |---|---|---|
-| Desktop base | `ace641c32eb8692b26a2839643fc99a8c445c45b` | Current desktop main when this composition began. Its latest common canonical main is `75d72a7f82ff5a533b110ae584b653b14a379ec4`. |
-| Canonical main included by the pending branches | `b086d165e2fc2a84783994f6505d810fa58d9dd7` | Already merged in canonical Exo; awaiting a reviewed desktop sync. |
-| Local growth and companion | `d911b390e989d1bbb33bc7c3fce3e2094f9ff5a9` | Temporary carry from [canonical PR #826](https://github.com/Moissanite-Labs/exo/pull/826). Shared core, API and web source remain owned there. Replace this carry with its merged canonical history before an official sync. |
-| Native web preference consumer | `b275cfaa61cc8cc962d58b35c77a141bb4e99ceb` | Temporary carry from [canonical PR #933](https://github.com/Moissanite-Labs/exo/pull/933). Production source equals `a81f2f0fa127fbcde73d3a739af575d6c04cfced`; the successor fixes a held-request test fixture. Replace with merged canonical history before an official sync. |
-| Cached provider-list retry | `d32b6d2f624cd1a562c3ec2919afbc53b4535bb8` | Temporary carry from [canonical PR #932](https://github.com/Moissanite-Labs/exo/pull/932). Its retry is composed with the existing desktop searchable picker: one button for retryable cached failures, none for authority refusals. Replace with merged canonical history before an official sync. |
-| Native preference bridge | `6a836f1e8693f9698c27f521649475ce8d24ba4b` | Desktop-owned [PR #98](https://github.com/Moissanite-Labs/exo-desktop/pull/98), successor to [PR #49](https://github.com/Moissanite-Labs/exo-desktop/pull/49); the original author branch is preserved. Native code, installer and fixture acceptance only. |
-| Native confirmations | `8c832adb02fca2e28dcde90a35d37d9e63fa90af` | Desktop-owned continuation of [PR #96](https://github.com/Moissanite-Labs/exo-desktop/pull/96), preserving its history. Includes Return/Escape cancellation and refusal when a pending sheet's page changes. |
+| Desktop base | `ace641c32eb8692b26a2839643fc99a8c445c45b` | Desktop main at the start of this review. Its latest common canonical main is `75d72a7f82ff5a533b110ae584b653b14a379ec4`. |
+| Canonical main included by the pending branches | `b086d165e2fc2a84783994f6505d810fa58d9dd7` | Merged in canonical Exo. Awaiting a reviewed desktop sync. |
+| Growth and companion | `d911b390e989d1bbb33bc7c3fce3e2094f9ff5a9` | Pending [canonical review](https://github.com/Moissanite-Labs/exo/pull/826). Shared core, API and web source belong there. |
+| Native web preference consumer | `1103f530ea8e1acd58caf817addfddccc299a591` | Pending [canonical review](https://github.com/Moissanite-Labs/exo/pull/933). Failed reads preserve saved intent. Exact lookup restores an older thread outside the bounded list. Confirmed 404 clears it. |
+| Cached provider-list retry | `d32b6d2f624cd1a562c3ec2919afbc53b4535bb8` | Pending [canonical review](https://github.com/Moissanite-Labs/exo/pull/932). The existing desktop search picker keeps one retry button for a cached transport failure and none for an authority refusal. |
+| Native preference bridge | `5838a68ea0b40813b16be37e6aee82268602f747` | [Desktop review](https://github.com/Moissanite-Labs/exo-desktop/pull/98). The [original restoration proposal](https://github.com/Moissanite-Labs/exo-desktop/pull/49) and its author branch remain intact. |
+| Native confirmations | `923860a6a8dd1dd0f1ff530b0562c929e84d4350` | [Desktop review](https://github.com/Moissanite-Labs/exo-desktop/pull/96). Preserves the source history and adds Return/Escape cancellation and refusal after the presenting page changes. |
 
-The existing overlay version checks, sync helper targets and installed-runtime state are unchanged. Before an official sync, refresh canonical main after #826, #932 and #933 merge, compare the resulting shared source with this tested composition, reconcile any delta, and independently review the exact resulting tree. A draft integration PR does not authorize an installation.
+The shared changes above are temporary copies for review. An official sync requires their merged canonical history, a comparison with this tested branch and independent review of the resulting tree. Existing overlay version checks and installed runtimes are unchanged.
 
-## Integration decisions
+## Composition
 
-The shared web implementation is consumed from canonical Exo rather than separately developed in desktop. Native source stays under `clients/desktop`. The local conflict resolutions preserve the existing desktop model-picker generation cleanup, companion detach/state synchronization and native read-position guards together. The canonical minimum-positive session-list validation is retained. The provider retry changes only the cached-error path; the existing initial-failure button and searchable picker remain. Its two browser cases use the desktop picker semantics and verify that retry does not save a model default. Fixture module lists include the companion, native preferences and desktop picker dependencies.
+Shared web source comes from canonical Exo. Native code stays under `clients/desktop`. The merge keeps the desktop model picker, companion cleanup and reading-position guards together. The provider fix changes only the cached-error path and does not save a model default. The new missing-thread handler also resets companion selection. This combination hook requires comparison with canonical source during the official sync.
 
-The native preference bridge retains an ephemeral WebKit store and available-port launch. It accepts only allowlisted UI fields from the connected main frame, scopes stored choices to the configured runtime identity and excludes tokens, credentials, drafts and transcript content. An explicit URL view remains intentional; ordinary token-only launch links can restore the native saved view.
+The browser keeps page data in memory and the server chooses an available local port. Native storage accepts only the listed display fields from the connected main frame. Saved choices belong to the configured runtime identity. Tokens, credentials, drafts and transcript content do not enter that copy.
 
-## Acceptance and limits
+A changed user home, explicit runtime override or missing bundled launcher disables native restoration. Bare executable names are resolved through PATH during launcher generation and saved as absolute paths. An explicit URL view takes priority over the saved view.
 
-`LOCAL-ACCEPTANCE.md` records the reproducible commands. The native harness compiles the actual production delegate and invokes its HTTP verification and document-start preference injection path. It runs the actual web assets and API against a fixture core, in a real WKWebView with a temporary home, isolated preference suite and nonpersistent browser storage.
+## Acceptance
 
-It verifies Appearance, route, selected thread, layout, transcript reading fraction and companion Full/Off choices through a same-process page reload and a second process on a different loopback port. The companion's pending egg and banked growth display use synthetic fixture values; these checks do not establish ledger verification. Core cryptographic growth checks remain separate.
+`LOCAL-ACCEPTANCE.md` records the commands and test results. The native harness compiles the actual app controller and uses its HTTP check and page-start injection. It serves the real web assets and API against a fixture core in WKWebView, with a temporary home and an isolated preference store.
 
-Native confirmation acceptance operates real sheet buttons and dispatches Return and Escape only to the disposable sheet. It also checks wrong-origin/subframe/restart refusal and that Continue becomes false after the presenting context changes. VoiceOver acceptance remains unperformed. No live core, provider credentials, model call, installed app or active user settings were used.
+The checks cover Appearance, route, thread, layout, reading position and Full/Off companion mode through reload and relaunch on another local port. An initial session-list error preserves the saved thread and reading position. A later successful reload restores both. The fixture also checks early Off during startup, an older thread outside the listed prefix and a live event during the saved snapshot read.
+
+Companion growth values are synthetic test data. These checks do not establish ledger verification. Native dialog checks operate real sheet buttons and send Return/Escape only to the temporary sheet. VoiceOver acceptance remains unperformed. No live core, credentials, model call or installed app was used.
