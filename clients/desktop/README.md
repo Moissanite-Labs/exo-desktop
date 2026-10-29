@@ -100,7 +100,7 @@ This is a local source alpha with ad hoc signing. It has no notarization, automa
 
 ## Scoped interface restoration
 
-The native preference bridge keeps only view, thread identifier, layout, transcript scroll fraction, Appearance and companion mode. It retains a nonpersistent WebKit store and available-port launch; no fixed port or persistent page token is required. The installer scopes the preference copy to the selected runtime home, seat and socket using an opaque hash. A different attached identity gets a separate copy. An unconfigured raw build, executable override, or isolated app with an inherited seat does not enable the bridge.
+The native preference bridge keeps only view, thread identifier, layout, transcript scroll fraction, Appearance and companion mode. It retains a nonpersistent WebKit store and available-port launch; no fixed port or persistent page token is required. The installer scopes the preference copy to the selected runtime home, seat and socket using an opaque hash. A different attached identity gets a separate copy. An unconfigured raw build, unavailable bundled launcher, changed runtime home, executable override, or isolated app with an inherited seat does not enable the bridge. Bare executable names passed to the launcher generator are resolved through PATH once and frozen as absolute paths before launch.
 
 The connected main frame receives `window.__exoDesktopPrefs` before page scripts run and can send allowlisted patches through `window.webkit.messageHandlers.exoDesktop`. Other origins and subframes cannot update it. Null clears the saved thread or scroll pointer. Drafts, transcript text, credential values and page tokens are excluded. Window geometry is saved separately in the app's own preferences and restored only on an available screen.
 
@@ -110,6 +110,7 @@ On a Mac with a graphical session, run the disposable acceptance harness without
 
 ```sh
 python3 clients/desktop/macos/Tests/test_native_preferences_acceptance.py
+python3 clients/desktop/macos/Tests/test_native_preference_context.py
 swiftc clients/desktop/macos/Sources/ExoDesktop/DesktopPreferences.swift clients/desktop/macos/Tests/DesktopPreferencesTests.swift -o /tmp/exo-prefs-check
 /tmp/exo-prefs-check
 ```

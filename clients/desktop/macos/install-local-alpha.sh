@@ -66,6 +66,15 @@ print(hashlib.sha256(json.dumps(identity, separators=(',', ':')).encode()).hexdi
 PYSCOPE
 )
 /usr/libexec/PlistBuddy -c "Add :ExoPreferenceScope string $preference_scope" "$plist"
+preference_home=$(python3 -c 'import os; print(os.path.realpath(os.path.expanduser("~")))')
+python3 - "$plist" "$preference_home" <<'PYHOME'
+import plistlib, sys
+with open(sys.argv[1], 'rb') as stream:
+    metadata = plistlib.load(stream)
+metadata['ExoPreferenceUserHome'] = sys.argv[2]
+with open(sys.argv[1], 'wb') as stream:
+    plistlib.dump(metadata, stream)
+PYHOME
 codesign --force --sign - "$app"
 codesign --verify --strict "$app"
 mkdir -p "$HOME/Applications"
