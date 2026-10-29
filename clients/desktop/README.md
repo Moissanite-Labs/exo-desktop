@@ -115,3 +115,8 @@ swiftc clients/desktop/macos/Sources/ExoDesktop/DesktopPreferences.swift clients
 ```
 
 The harness compiles the production delegate, uses fixture HTTP pages, temporary home directories and an isolated preference suite, and relaunches at a second port. It checks injection, restoration and origin/subframe rejection; it does not exercise a live provider or install the alpha.
+The native shell answers JavaScript confirmation and alert requests from the connected main-frame origin. Confirmations default to Cancel; Continue returns approval to the page. Child frames and other origins cannot open a native dialog. Native sheet interaction still requires macOS acceptance testing before this draft is considered ready.
+
+### Disposable native dialog acceptance
+
+`python3 clients/desktop/macos/Tests/test_native_dialog_acceptance.py` compiles the production delegate into a temporary executable and opens a fixture WKWebView on a Mac graphical session. It operates the real Cancel and Continue sheet buttons, dispatches Return and Escape through AppKit to the disposable sheet (both cancel), and verifies restart, wrong-origin and subframe requests are refused. The harness uses a temporary home and local fixture server; it does not install the app, launch an Exo core or use credentials. The process-local Escape monitor is restricted to the active confirmation sheet and removed when it completes. This does not replace manual VoiceOver acceptance.

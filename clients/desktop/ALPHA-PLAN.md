@@ -58,3 +58,7 @@ Treat the separate reported release-build startup race as an investigation item.
 ## Release boundary
 
 The replay freeze is fixed in `9be0eb22` on the alpha branch. The three items above are planned work, not features delivered by that fix. Notarization, automatic updates and distribution beyond this local pilot remain later release work.
+
+## Native web dialogs (#91)
+
+The connected main frame can present confirmation and informational sheets. Provider-key removal can receive an explicit Continue response instead of WebKit's implicit Cancel. Dialog text is bounded, the confirm defaults to Cancel, and origin/port/subframe checks reject other callers. The compiled policy tests cover same-origin paths and rejection cases. Manual sheet interaction and accessibility acceptance remain pending; no installed app has been replaced.
