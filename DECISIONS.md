@@ -4312,6 +4312,15 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
 
 
 ## D-065 (2026-10-13) Permissions bypass: a permissionless mode with a floor for Exo's own records
+- **Full-session amendment (2026-10-27, A's explicit request, #623):** a live principal can authorize
+  `/permissions full <session-id>` for all tool calls in one session, including background messages and steers.
+  Other sessions and delegated children do not inherit a selected-session grant. A separate explicit
+  `/permissions full all` authorizes every session in this core, including child sessions. Neither scope
+  authorizes calls lacking a session ID. Full skips all gate classifications, asks, denies,
+  posting holds and credential/store floors. Executor requirements and control-plane authentication remain.
+  A signed, redacted exact-call audit must commit before each allow. Audit failure blocks, and mode switches
+  serialize with that audit. Any caller can revoke with ask even during audit failure. No pending approval is
+  answered by enabling full, and no full grant or seat default is saved. Bypass retains its original rules.
 - **Why (A):** "permissionless mode where the agent doesn't have to ask for permission, like Claude Code and Muse Code
   have". Under the default-ask gate (D-038) a long task stops on every unknown program, script, delete and post.
 - **Decision:** a mode of the gate, `ask` (default) or `bypass`. In bypass an `ask` becomes `allow`, so the agent never
@@ -4967,3 +4976,9 @@ ruling carries Status, Why, Proposal, Rejected and Open instead, and takes Decis
   issue's five rows added to the corpus as tightened pairs.
 - **Docs:** `docs/GATE.md` "Store-path checks", "Secret-store paths", "Search tools", "Change limits",
   `CHANGELOG.md`.
+
+## D-083 (2026-10-27) Per-seat GitHub auth carries the core line budget over the ceiling (issue #51 exception)
+- **Status:** Accepted 2026-10-27. The #51 ruling grants an open-ended exception, for now, for core edits the desktop requires. Per-seat GitHub auth is such a feature.
+- **Why:** the #22 stack counts 16,066 core lines, 242 over the 15,824 ceiling, and main itself is already 15 over. The budget policy (D-077) says a feature that crosses the ceiling waits for a reduction or carries a recorded decision. This entry is that decision.
+- **Decision:** `CORE_HEADROOM` rises from 1011 to 1300, ceiling 16,116, leaving 50 lines of headroom on the #22 stack. The floor does not move. A real reduction is still owed, and the headroom does not grow again without a new recorded decision.
+- **Cost:** the count signal is weaker until that reduction lands. The structural goal in the budget policy (no private-state reads across module boundaries, no product imports into the engine) is unchanged.

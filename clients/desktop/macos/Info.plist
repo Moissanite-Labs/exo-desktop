@@ -8,8 +8,12 @@
 	<string>ExoDesktop</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.askaconsult.exo-desktop</string>
+	<key>CFBundleIconFile</key>
+	<string>Exo</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>ExoSourceCommit</key>
+	<string>unknown</string>
 	<key>CFBundleName</key>
 	<string>Exo</string>
 	<key>CFBundlePackageType</key>
