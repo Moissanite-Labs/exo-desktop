@@ -8,6 +8,10 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 - Added a gate PR preflight job that runs plugin acceptance and the base comparator, retaining its differential artifact (#423). Hosted execution and required-check configuration remain pending.
 
 ### Fixed
+- The `types` CI job passes on the fork again. Three mypy errors in the fork's GitHub auth code
+  (`src/exo/core/github_auth.py`, `src/exo/github_auth_cmd.py`) were not in the baseline: a store lookup with a
+  possibly missing key, and a second `subprocess.run` result reusing the bytes-typed name of the first. No
+  behaviour changes.
 - The Providers page says why the model list failed instead of showing only a bare exception name, and
   offers "Try again" only when a retry can help. A core that answers and refuses the caller is no longer
   reported as unreachable, and a failed load keeps the last good list, so the default picker stays usable
