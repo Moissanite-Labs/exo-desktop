@@ -72,7 +72,8 @@ const PEER=(mid,id)=>({id,role:"user",content:[{type:"text",text:"[peer message 
 
 
 def _run(tmp_path, script: str, setup: str = "", panels: str = "") -> None:
-    for name in ("chat", "chat_state", "approvals", "model_picker"):
+    for name in ("chat", "chat_state", "approvals", "model_picker", "desktop_prefs"):
+
         (tmp_path / f"{name}.mjs").write_text((STATIC / f"{name}.js").read_text().replace('.js"', '.mjs"'))
     (tmp_path / "dom.mjs").write_text(DOM)
     (tmp_path / "bus.mjs").write_text(BUS)
