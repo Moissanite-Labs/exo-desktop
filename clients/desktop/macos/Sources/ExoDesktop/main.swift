@@ -132,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func startServer() {
         guard !terminating, let webView else { return }
         transitioning = true
+        origin = nil
         hasReachedReady = false
         setStatus("Starting Exo…", busy: true)
         let currentLauncher = launcher
@@ -239,7 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        guard webView === self.webView, !terminating, let window,
+        guard webView === self.webView, !transitioning, !terminating, let window,
               NativeDialogPolicy.allows(origin: origin, frameURL: frame.request.url,
                                         isMainFrame: frame.isMainFrame) else {
             completionHandler(false)
@@ -250,7 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         alert.informativeText = String(message.prefix(4000))
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Continue")
-        // Cancel has Escape semantics; make Return equally safe and predictable.
+        // Make Return explicitly choose the non-destructive action.
         alert.buttons[0].keyEquivalent = "\r"
         alert.beginSheetModal(for: window) { result in
             completionHandler(result == .alertSecondButtonReturn)
@@ -259,7 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        guard webView === self.webView, !terminating, let window,
+        guard webView === self.webView, !transitioning, !terminating, let window,
               NativeDialogPolicy.allows(origin: origin, frameURL: frame.request.url,
                                         isMainFrame: frame.isMainFrame) else {
             completionHandler()
