@@ -95,3 +95,5 @@ Quit the isolated app. To stop its alpha core left running, run:
 Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*` backups. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
 
 This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.
+
+The native shell answers JavaScript confirmation and alert requests from the connected main-frame origin. Confirmations default to Cancel; Continue returns approval to the page. Child frames and other origins cannot open a native dialog. Native sheet interaction still requires macOS acceptance testing before this draft is considered ready.
