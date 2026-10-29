@@ -9,7 +9,7 @@ root = Path(__file__).resolve().parents[1]
 repo = root.parents[2]
 baseline = 'f9d1e423'  # runtime whose server.py, service.py and static assets the overlay verifies
 pinned = 'cc38bd3af1cd6769b6f0894d7db1dd92a1060e0d2ac2a9c14f8368254431b823'
-exo_main = '938b027a'  # reviewed exo main whose server.py and service.py the overlay also accepts
+exo_main = '75d72a7f'  # reviewed exo main whose server.py and service.py the overlay also accepts
 
 
 def digest(path):
