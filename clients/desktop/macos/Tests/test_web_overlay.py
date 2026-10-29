@@ -9,15 +9,17 @@ root = Path(__file__).resolve().parents[1]
 repo = root.parents[2]
 baseline = 'f9d1e423'  # runtime whose server.py, service.py and static assets the overlay verifies
 pinned = 'cc38bd3af1cd6769b6f0894d7db1dd92a1060e0d2ac2a9c14f8368254431b823'
+exo_main = '938b027a'  # reviewed exo main whose server.py and service.py the overlay also accepts
 
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-if subprocess.run(['git', '-C', str(repo), 'cat-file', '-e', baseline + '^{commit}'], capture_output=True).returncode:
-    print('SKIP: baseline runtime ' + baseline + ' is not in this checkout\'s history')
-    sys.exit(0)
+for commit in (baseline, exo_main):
+    if subprocess.run(['git', '-C', str(repo), 'cat-file', '-e', commit + '^{commit}'], capture_output=True).returncode:
+        print('SKIP: runtime ' + commit + ' is not in this checkout\'s history')
+        sys.exit(0)
 with tempfile.TemporaryDirectory(prefix='overlay fixture ') as tmp:
     base = Path(tmp)
     runtime = base / 'runtime'
@@ -39,4 +41,22 @@ with tempfile.TemporaryDirectory(prefix='overlay fixture ') as tmp:
     plain = base / 'out plain'
     subprocess.run([sys.executable, str(root / 'prepare-web-overlay.py'), '--plugins', str(plugins), '--output', str(plain)], check=True, capture_output=True)
     assert digest(plain / 'exo-command/exo_command/static/style.css') == original
-print('PASS: overlay stylesheet is the pinned runtime stylesheet for each flag; without a flag the runtime stylesheet is kept')
+
+    # Exo main's server.py and service.py are accepted for the replay fix; the asset flags still refuse its assets.
+    main_runtime = base / 'main runtime'
+    main_runtime.mkdir()
+    archive = subprocess.run(['git', '-C', str(repo), 'archive', exo_main, 'plugins'], capture_output=True, check=True).stdout
+    subprocess.run(['tar', '-x', '-C', str(main_runtime)], input=archive, check=True)
+    main_plugins = main_runtime / 'plugins'
+    main_plain = base / 'main plain'
+    subprocess.run([sys.executable, str(root / 'prepare-web-overlay.py'), '--plugins', str(main_plugins), '--output', str(main_plain)], check=True, capture_output=True)
+    for name in ('server.py', 'service.py'):
+        assert digest(main_plain / 'exo-command/exo_command' / name) == digest(repo / 'plugins/exo-command/exo_command' / name), name
+    for name in ('chat.js', 'providers.js', 'style.css', 'approvals.js'):
+        assert digest(main_plain / 'exo-command/exo_command/static' / name) == digest(main_plugins / 'exo-command/exo_command/static' / name), name
+    for extra, refused in ((['--with-model-picker'], 'chat.js'), (['--with-approval-shortcuts'], 'approvals.js')):
+        out = base / ('main ' + extra[0])
+        run = subprocess.run([sys.executable, str(root / 'prepare-web-overlay.py'), '--plugins', str(main_plugins), '--output', str(out), *extra], capture_output=True, text=True)
+        assert run.returncode and run.stderr.rstrip().endswith('baseline: ' + refused) and not out.exists(), (extra, run.stderr)
+print('PASS: overlay stylesheet is the pinned runtime stylesheet for each flag; without a flag the runtime stylesheet is kept;'
+      ' exo main ' + exo_main + ' takes the replay fix and its assets are refused by both flags')
