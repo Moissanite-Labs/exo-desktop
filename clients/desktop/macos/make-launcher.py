@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import shlex
+import shutil
 
 p = argparse.ArgumentParser()
 p.add_argument('--output', required=True)
@@ -17,6 +18,17 @@ q = shlex.quote
 attached = a.attach_socket is not None
 if attached and not all((a.plugins, a.exo_home, a.seat)):
     p.error('attached mode requires --plugins, --exo-home and --seat')
+# A launcher changes directory before exec; resolve paths once while generating it.
+for name in ('exo', 'attach_socket', 'plugins', 'exo_home'):
+    value = getattr(a, name)
+    if value is not None:
+        value = os.path.expanduser(value)
+        if name == 'exo' and not os.path.dirname(value):
+            resolved = shutil.which(value)
+            if resolved is None:
+                p.error('the named executable was not found on PATH')
+            value = resolved
+        setattr(a, name, os.path.realpath(value))
 script = '''#!/bin/sh
 set -eu
 export PYTHONUNBUFFERED=1

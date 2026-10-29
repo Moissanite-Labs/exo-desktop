@@ -78,6 +78,10 @@ conversation titles, IDs and agent names, and a Show latest messages control for
 layouts. Status filters show working conversations and pending approvals. Search never submits a
 prompt or changes the selected conversation.
 
+Exopet adds an activity glyph with Mini, Full and Off controls. Full includes a verified growth card and an
+empty-thread lattice; Off stops pet reads and rendering. Personal XP is banked while the community hatch is
+pending. No requests go to the project site. See [the implementation notes](../../docs/ui/EXOPET.md).
+
 - **Chat:** sessions on the left, a transcript with streamed text, tool lines, approval cards and a composer
   in the middle, and the side panel area on the right. A reply streams as plain text and, once complete, is
   rendered as Markdown (headings, lists, code, quotes and pipe tables, built as DOM nodes, never as HTML).
@@ -90,7 +94,8 @@ prompt or changes the selected conversation.
   keeps its line breaks. A panel whose data is missing or odd shows its `text`. The page sends `ui.respond`
   for opened, dismissed and acted (a choice or a taste verdict).
 - **Tasks:** `tasks.list`, kept current by `task.updated`.
-- **Schedule:** `schedule.edit` list, add, pause, resume, run now, remove.
+- **Schedule:** `schedule.edit` list, add, pause, resume, run now, remove. Remove has no undo, so it waits for a
+  separate Confirm remove click.
 
 The server relays the protocol, it adds no state of its own beyond a ring of the last 3000 events and the
 list of open panels. When a resume cursor falls outside that ring, SSE signals the gap, replays the

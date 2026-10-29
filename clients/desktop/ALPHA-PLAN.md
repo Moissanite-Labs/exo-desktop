@@ -30,11 +30,11 @@ Bundling Python needs a packaging and signing check. The existing ad hoc source 
 
 Status: planned. Tracked in the [GitHub issue](https://github.com/aska-digital/exo-desktop/issues/30).
 
-The web view uses a nonpersistent store. Reload starts a new web server, and the alpha requests an available port. Browser storage belongs to an origin, so a different port also prevents reuse of saved browser preferences. Enabling a persistent store alone will not resolve this.
+The web view keeps a nonpersistent store and available-port launch. The native successor to PR #49 now supplies a scoped, allowlisted preference bridge and saves window geometry; disposable native fixture tests cover relaunch at a changed port. Shared web restoration support must land in canonical Exo and reach the selected plugin assets before application restoration is complete. Browser storage alone remains insufficient because its origin includes the port.
 
 Acceptance:
 
-- Restore the selected thread, chat layout, Appearance (the `xc-appearance` choice), window size and position after quit/reopen and Reload Page. Appearance is listed because the web page keeps it in browser storage: the nonpersistent website data store drops it on quit, and the alpha's port 0 request gives each reload a new origin, so a Light or System choice returns to Dark today.
+- Restore the selected thread, chat layout, Appearance (the `xc-appearance` choice), window size and position after quit/reopen and Reload Page. Appearance is listed because the web page keeps it in browser storage: the nonpersistent website data store drops it on quit, and the alpha's port 0 request gives each reload a new origin, so the scoped native bridge and shared consumer must restore those choices together.
 - Restore a useful position in an existing transcript where practical. Handle a removed thread by returning to the thread picker.
 - Save only the interface preferences needed for restoration. Keep the page access token out of persisted preferences and diagnostic output.
 - Keep saved conversations and memory in the core. Verify restoration across changing local ports without changing the selected core.
@@ -58,3 +58,7 @@ Treat the separate reported release-build startup race as an investigation item.
 ## Release boundary
 
 The replay freeze is fixed in `9be0eb22` on the alpha branch. The three items above are planned work, not features delivered by that fix. Notarization, automatic updates and distribution beyond this local pilot remain later release work.
+
+## Native web dialogs (#91)
+
+The connected main frame can present confirmation and informational sheets. Provider-key removal can receive an explicit Continue response instead of WebKit's implicit Cancel. Dialog text is bounded, the confirm defaults to Cancel, and origin/port/subframe checks reject other callers. The compiled policy tests cover same-origin paths and rejection cases. Manual sheet interaction and accessibility acceptance remain pending; no installed app has been replaced.

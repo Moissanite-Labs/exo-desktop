@@ -97,3 +97,29 @@ Quit the isolated app. To stop its alpha core left running, run:
 Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*` backups. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
 
 This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.
+
+## Scoped interface restoration
+
+The native preference bridge keeps only view, thread identifier, layout, transcript scroll fraction, Appearance and companion mode. It retains a nonpersistent WebKit store and available-port launch; no fixed port or persistent page token is required. The installer scopes the preference copy to the selected runtime home, seat and socket using an opaque hash. A different attached identity gets a separate copy. An unconfigured raw build, unavailable bundled launcher, changed runtime home, executable override, or isolated app with an inherited seat does not enable the bridge. Bare executable names passed to the launcher generator are resolved through PATH once and frozen as absolute paths before launch.
+
+The connected main frame receives `window.__exoDesktopPrefs` before page scripts run and can send allowlisted patches through `window.webkit.messageHandlers.exoDesktop`. Other origins and subframes cannot update it. Null clears the saved thread or scroll pointer. Drafts, transcript text, credential values and page tokens are excluded. Window geometry is saved separately in the app's own preferences and restored only on an available screen.
+
+The shared web restoration consumer must first land in canonical [Exo](https://github.com/Moissanite-Labs/exo) and reach the selected plugin assets through a reviewed sync. Installing this native bridge alone does not make older web assets restore interface choices. Existing attached installations continue using their explicitly selected plugin copy until separately updated.
+
+On a Mac with a graphical session, run the disposable acceptance harness without installing an app or connecting a core:
+
+```sh
+python3 clients/desktop/macos/Tests/test_native_preferences_acceptance.py
+python3 clients/desktop/macos/Tests/test_native_preference_context.py
+swiftc clients/desktop/macos/Sources/ExoDesktop/DesktopPreferences.swift clients/desktop/macos/Tests/DesktopPreferencesTests.swift -o /tmp/exo-prefs-check
+/tmp/exo-prefs-check
+```
+
+The harness compiles the production delegate, uses fixture HTTP pages, temporary home directories and an isolated preference suite, and relaunches at a second port. It checks injection, restoration and origin/subframe rejection; it does not exercise a live provider or install the alpha.
+The native shell answers JavaScript confirmation and alert requests from the connected main-frame origin. Confirmations default to Cancel; Continue returns approval to the page. Child frames and other origins cannot open a native dialog. Native sheet interaction still requires macOS acceptance testing before this draft is considered ready.
+
+### Disposable native dialog acceptance
+
+`python3 clients/desktop/macos/Tests/test_native_dialog_acceptance.py` compiles the production delegate into a temporary executable and opens a fixture WKWebView on a Mac graphical session. It operates the real Cancel and Continue sheet buttons, dispatches Return and Escape through AppKit to the disposable sheet (both cancel), and verifies restart, wrong-origin and subframe requests are refused. The harness uses a temporary home and local fixture server; it does not install the app, launch an Exo core or use credentials. The process-local Escape monitor is restricted to the active confirmation sheet and removed when it completes. This does not replace manual VoiceOver acceptance.
+
+The [2026-10-29 draft integration record](INTEGRATION-20261029.md) identifies the pending canonical carries and disposable composed acceptance. It is separate from a release, official sync pin or installed alpha.

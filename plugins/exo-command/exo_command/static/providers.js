@@ -166,6 +166,8 @@ export function mount(root) {
       failed && modelsError.retryable ? h("div", { class: "xc-btnrow" },
         h("button", { class: "xc-btn", type: "button", onclick: retryModels }, "Try again")) : null,
       modelsError && !failed ? h("div", { class: "xc-warn", role: "status" }, modelsError.text + " This list is from the last good read.") : null,
+      modelsError && !failed && modelsError.retryable ? h("div", { class: "xc-btnrow" },
+        h("button", { class: "xc-btn", type: "button", onclick: retryModels }, "Try again")) : null,
       res ? h("div", { class: "xc-prov-res " + (res.cls || ""), role: "status" }, res.text) : null);
   }
 
