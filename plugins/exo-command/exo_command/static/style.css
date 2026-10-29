@@ -821,6 +821,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); color-scheme: var(--s
 .xc-model-name { font-weight: 600; }
 .xc-model-route { font: 12px var(--xc-mono); opacity: .8; overflow-wrap: anywhere; }
 .xc-model-status, .xc-model-note { margin: 0; font-size: 12px; opacity: .8; }
+/* In chat this text is already var(--fg-3); fading it as well falls below 4.5:1 in the light theme. */
+.xc-model-picker .xc-model-status, .xc-model-picker .xc-model-note { opacity: 1; }
 .xc-prov-def > .xc-search-model-picker { flex: 1; }
 
 .xc-model-current { margin-left: 8px; font-size: 10px; font-weight: 400; text-transform: uppercase; opacity: .7; }

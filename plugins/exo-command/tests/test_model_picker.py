@@ -156,6 +156,37 @@ def test_chat_picker_stays_one_column_inside_the_grid_composer(page):
     assert layout == {'width': 1440, 'columns': 1, 'sameLeft': True, 'rowBelow': True}
 
 
+# Contrast as test_workspace_design.py measures it (WCAG ratio against the first opaque background), with the
+# text's own opacity and its ancestors' opacity blended in, because the picker's text colour alone ignores them.
+PICKER_TEXT_CONTRAST = r"""(()=>{
+  const css=e=>getComputedStyle(e),rgb=value=>(value.match(/[\d.]+/g)||[]).map(Number);
+  const background=e=>{for(let n=e;n;n=n.parentElement){const c=css(n).backgroundColor,a=rgb(c);if(a.length===3 || a[3]===1)return c;}return css(document.body).backgroundColor;};
+  const luminance=color=>color.slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
+  const ratio=(a,b)=>{const x=luminance(a),y=luminance(b);return(Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
+  const shown=e=>{let alpha=rgb(css(e).color)[3]??1;for(let n=e;n;n=n.parentElement)alpha*=Number(css(n).opacity);
+    const fg=rgb(css(e).color),bg=rgb(background(e));return fg.slice(0,3).map((v,i)=>alpha*v+(1-alpha)*bg[i]);};
+  const picker=document.querySelector('.xc-composer .xc-model-picker');
+  return Object.fromEntries(['.xc-model-status','.xc-model-note'].map(sel=>{const e=picker.querySelector(sel);
+    return [sel,{text:e.textContent.length>0,ratio:Math.round(ratio(shown(e),rgb(background(e)))*100)/100}];}));
+})()"""
+
+
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_chat_picker_status_and_note_text_are_readable_in_each_theme(page, theme):
+    """The chat picker's status and note keep the 4.5:1 text contrast that test_workspace_design.py asks of #801's text."""
+    mount_view(page, 'chat')
+    page.wait('document.querySelectorAll(".xc-sess").length === 2')
+    page.eval("(async()=>{(await import('/static/appearance.js')).applyAppearance('" + theme + "');})()")
+    assert page.eval('document.documentElement.dataset.theme') == theme
+    command(page, '/model')
+    page.wait('!!document.querySelector("[role=combobox]") && document.querySelectorAll("[role=option]").length > 0')
+    search(page, 'no such model')
+    page.wait('document.querySelector(".xc-model-status").textContent.startsWith("No matching models")')
+    measured = page.eval(PICKER_TEXT_CONTRAST)
+    assert all(m['text'] for m in measured.values()), measured
+    assert all(m['ratio'] >= 4.5 for m in measured.values()), measured
+
+
 def test_chat_escape_and_old_picker_cannot_change_new_thread(page):
     mount_view(page, 'chat')
     page.wait('document.querySelectorAll(".xc-sess").length === 2')
