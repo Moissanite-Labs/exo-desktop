@@ -253,7 +253,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         alert.addButton(withTitle: "Continue")
         // Make Return explicitly choose the non-destructive action.
         alert.buttons[0].keyEquivalent = "\r"
+        // AppKit consumes the Cancel button's Escape equivalent when it becomes the
+        // Return default. Handle Escape only for this sheet, for its lifetime.
+        var escapeMonitor: Any?
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak alert] event in
+            guard let alert, event.window === alert.window, event.keyCode == 53,
+                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+            alert.buttons[0].performClick(nil)
+            return nil
+        }
         alert.beginSheetModal(for: window) { result in
+            if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor) }
             completionHandler(result == .alertSecondButtonReturn)
         }
     }

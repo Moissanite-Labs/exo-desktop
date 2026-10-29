@@ -27,7 +27,9 @@ with tempfile.TemporaryDirectory(prefix="exo-native-dialog-") as d:
     src += """
 extension AppDelegate {
  func acceptance(_ url: URL) {
+  setbuf(stdout, nil)
   NSApp.setActivationPolicy(.accessory)
+  NSApp.activate(ignoringOtherApps:true)
   let w = NSWindow(contentRect: NSRect(x:100,y:100,width:600,height:400),styleMask:[.titled],backing:.buffered,defer:false)
   let v = WKWebView(frame:w.contentView!.bounds)
   self.window=w; self.webView=v; self.origin=url; v.uiDelegate=self
@@ -43,12 +45,20 @@ extension AppDelegate {
     let sheet=w.attachedSheet!; let all=buttons(sheet.contentView!)
     precondition(all.contains{$0.title=="Cancel"} && all.contains{$0.title=="Continue"})
     precondition(sheet.defaultButtonCell?.title == "Cancel", "Return default must be Cancel")
-    all.first{$0.title==title}!.performClick(nil)
+    if title=="Escape" || title=="Return" {
+     sheet.makeKeyAndOrderFront(nil)
+     RunLoop.current.run(until:Date().addingTimeInterval(0.3))
+     let character=String(UnicodeScalar(title=="Escape" ? 27 : 13)!)
+     let event=NSEvent.keyEvent(with:.keyDown,location:.zero,modifierFlags:[],timestamp:ProcessInfo.processInfo.systemUptime,windowNumber:sheet.windowNumber,context:nil,characters:character,charactersIgnoringModifiers:character,isARepeat:false,keyCode:title=="Escape" ? 53 : 36)!
+     NSApp.sendEvent(event)
+    } else { all.first{$0.title==title}!.performClick(nil) }
    }
    wait { result != nil || error != nil }; precondition(error==nil && result==expected)
    print("PASS native confirm \\(title) expected \\(expected)")
   }
   confirm("Cancel",expected:false); confirm("Continue",expected:true)
+  confirm("Return",expected:false)
+  confirm("Escape",expected:false)
   self.transitioning=true
   confirm("restart pending",expected:false,allowed:false)
   self.transitioning=false
