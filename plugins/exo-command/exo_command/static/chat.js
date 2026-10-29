@@ -26,7 +26,7 @@ function draft(id) {
 export function mount(root, { pet = null } = {}) {
   let mounted = true, navigation = 0, homeRevision = 0;
   const savedThread = desktopPreference("thread"), savedScroll = desktopPreference("scroll");
-  let pendingReading = null, transcriptLoaded = false, initialSelectionPending = true;
+  let pendingReading = null, transcriptLoaded = false, initialSelectionPending = true, initialReadingAllowed = true, nativeRestoreId = null, recoveryWanted = null;
   function saveReading() {
     if (mounted && current && !loading && transcriptLoaded) saveDesktopPreferences({ thread: current, scroll: logEl.scrollHeight > logEl.clientHeight ? Math.min(1, Math.max(0, logEl.scrollTop / (logEl.scrollHeight - logEl.clientHeight))) : 0 });
   }
@@ -91,7 +91,7 @@ export function mount(root, { pet = null } = {}) {
   const logEl = h("div", { class: "xc-log", id: "xc-transcript", role: "log", "aria-label": "Conversation messages", "aria-live": "polite", tabindex: "0" });
   const latestBtn = h("button", { class: "xc-btn xc-latest", type: "button", hidden: true, "aria-controls": "xc-transcript",
     onclick: () => { home(); logEl.focus(); } }, "Show latest messages");
-  for (const kind of ["wheel", "touchstart", "pointerdown", "keydown"]) logEl.addEventListener(kind, () => { pendingReading = null; }, { passive: true });
+  for (const kind of ["wheel", "touchstart", "pointerdown", "keydown"]) logEl.addEventListener(kind, () => { pendingReading = null; initialReadingAllowed = false; }, { passive: true });
   logEl.addEventListener("scroll", () => { ++homeRevision; updateLatest(); saveReading(); });
   const apprEl = h("div", { class: "xc-approvals" });
   const steerEl = h("div", { class: "xc-steers", "aria-label": "Queued steer messages" });
@@ -170,7 +170,7 @@ export function mount(root, { pet = null } = {}) {
   }
   function switchLayout(v) {
     if (!LAYOUTS.includes(v)) return;
-    pendingReading = null;
+    pendingReading = null; initialReadingAllowed = false;
     layout = v; setLayout(v); saveDesktopPreferences({ layout: v, scroll: null }); arrange(); drawLog();
   }
   arrange();
@@ -603,12 +603,21 @@ export function mount(root, { pet = null } = {}) {
 
   // Session lists can answer out of order: one asked before a thread was created must not replace one asked after it.
   let listAsked = 0, listShown = 0;
+  function keepSelectedSession(fresh) {
+    const selected = sessions.find(s => s.id === current);
+    return selected && !fresh.some(s => s.id === current) ? [selected, ...fresh] : fresh;
+  }
+  function rememberSession(info, id) {
+    const previous = sessions.find(s => s.id === id);
+    const row = { ...previous, ...info, id, title: info?.title || previous?.title || id };
+    sessions = previous ? sessions.map(s => s.id === id ? row : s) : [row, ...sessions];
+  }
   async function refreshSessions() {
     const asked = ++listAsked;
     try {
       const fresh = (await api("GET", "/api/chat/sessions")).sessions;
       if (!Array.isArray(fresh)) throw Error("The conversation list could not be read.");
-      if (asked > listShown) { listShown = asked; sessions = fresh; drawSessions(); }
+      if (asked > listShown) { listShown = asked; sessions = keepSelectedSession(fresh); drawSessions(); }
       return true;
     } catch (e) { fail(e); return false; }
   }
@@ -622,10 +631,10 @@ export function mount(root, { pet = null } = {}) {
     return opened;
   }
 
-  async function open(id, restoreScroll = null) {
-    saveReading();
-    if (typeof restoreScroll !== "number") saveDesktopPreferences({ thread: id, scroll: null });
-    transcriptLoaded = false;
+  async function open(id, restoreScroll = null, restoringNative = false) {
+    saveReading(); recoveryWanted = null;
+    if (!restoringNative && typeof restoreScroll !== "number") saveDesktopPreferences({ thread: id, scroll: null });
+    transcriptLoaded = false; nativeRestoreId = restoringNative ? id : null;
     saveDraft(); ++navigation; lastThread = id;
     pendingReading = typeof restoreScroll === "number" ? { id, fraction: restoreScroll, navigation } : null;
     modelPicker.hidden = true; ++pickerGeneration;
@@ -638,8 +647,9 @@ export function mount(root, { pet = null } = {}) {
     try {
       const d = await api("GET", "/api/chat/sessions/" + encodeURIComponent(id));
       if (current !== id || generation !== snapshotGeneration) return;
+      rememberSession(d.session, id);
       items = fromMessages(d.messages || []);
-      transcriptLoaded = true;
+      transcriptLoaded = true; nativeRestoreId = null;
       dropSteers(id, had, d.steers);
       loadedSeq = d.seq || 0;
       const live = sessions.find((s) => s.id === id);
@@ -647,15 +657,37 @@ export function mount(root, { pet = null } = {}) {
       model = (d.session && d.session.model) || "";
     } catch (e) {
       if (!mounted || current !== id || generation !== snapshotGeneration) return;
+      if (restoringNative && e.status === 404) { forgetMissingRestore(id); fail(e); return; }
       fail(e);
     }
     if (!mounted || current !== id || generation !== snapshotGeneration) return;
     loading = false; syncPet();
-    drawLog(); drawStatus(); loadContext();
+    drawSessions(); drawLog(); drawStatus(); loadContext();
+
     const buffered = pending; pending = [];
     buffered.forEach(handle);
     syncApprovals();
     restoreReading(id, generation);
+    recoverIfNeeded();
+  }
+
+  function recoverIfNeeded() {
+    if (!recoveryWanted || loading) return;
+    const owner = recoveryWanted; recoveryWanted = null;
+    if (mounted && owner.navigation === navigation && owner.session === current) recover();
+  }
+
+  function forgetMissingRestore(id) {
+    saveDesktopPreferences({ thread: null, scroll: null });
+    pendingReading = null; nativeRestoreId = null; transcriptLoaded = false; recoveryWanted = null;
+    sessions = sessions.filter(s => s.id !== id);
+    saveDraft();
+    // Text entered during the read stays with its owner; an empty missing thread returns to the chooser.
+    if (!draft(id).text && !draft(id).pending) { current = lastThread = null; restoreDraft(); }
+    ++snapshotGeneration; loading = false;
+    if (pet) pet.selectSession(current);
+    drawSessions(); drawLog(); drawStatus(); drawSide();
+    const buffered = pending; pending = []; buffered.forEach(handle);
   }
 
   function restoreReading(id, generation) {
@@ -670,24 +702,29 @@ export function mount(root, { pet = null } = {}) {
     if (pet) pet.selectSession(current);
     const id = current, generation = ++snapshotGeneration, cutoff = bus.lastSeq(), had = Object.keys(steers), asked = ++listAsked;
     loading = true;
-    let listReady = false;
+    let listReady = false, exactRead = false;
     try {
       const freshSessions = (await api("GET", "/api/chat/sessions")).sessions;
       if (!Array.isArray(freshSessions)) throw Error("The conversation list could not be read.");
-      const d = id ? await api("GET", "/api/chat/sessions/" + encodeURIComponent(id)) : null;
+      let d = null;
+      if (id) { exactRead = true; d = await api("GET", "/api/chat/sessions/" + encodeURIComponent(id)); }
       if (id !== current || generation !== snapshotGeneration) return;
-      if (asked > listShown) { listShown = asked; sessions = freshSessions; }
+      if (asked > listShown) { listShown = asked; sessions = keepSelectedSession(freshSessions); }
       listReady = true;
       if (d) {
+        rememberSession(d.session, id);
         items = mergeTranscript(fromMessages(d.messages || []), items);
-        transcriptLoaded = true;
+        transcriptLoaded = true; nativeRestoreId = null;
         dropSteers(id, had, d.steers);
         loadedSeq = Math.min(cutoff, d.seq || 0);
         busy = sessions.some((s) => s.id === id && s.status === "live");
         model = d.session.model || model;
       }
       panelsOpen = bus.openPanels();
-    } catch (e) { fail(e); }
+    } catch (e) {
+      if (mounted && id === current && generation === snapshotGeneration && nativeRestoreId === id && exactRead && e.status === 404) forgetMissingRestore(id);
+      fail(e);
+    }
     finally {
       if (id === current && generation === snapshotGeneration) {
         const reading = hasDesktopPreferences() && !pendingReading && !nearHome(layout, logEl.scrollTop, logEl.scrollHeight, logEl.clientHeight) ? logEl.scrollTop : null;
@@ -698,6 +735,7 @@ export function mount(root, { pet = null } = {}) {
         if (reading !== null) { ++homeRevision; logEl.scrollTop = reading; updateLatest(); saveReading(); }
         restoreReading(id, generation);
         finishInitialSelection(listReady);
+        recoverIfNeeded();
       }
     }
   }
@@ -963,9 +1001,14 @@ export function mount(root, { pet = null } = {}) {
   const offBus = bus.on(handle);
   let synced = bus.lastSeq() ? -1 : 0;
   const offState = bus.onState((st) => {
-    if (st.synced !== synced) { synced = st.synced; recover(); }
+    if (st.synced !== synced) {
+      synced = st.synced;
+      if (loading && current) recoveryWanted = { navigation, session: current };
+      else recover();
+    }
   });
-  const off = () => { ++pickerGeneration; saveReading(); if (hasDesktopPreferences()) window.removeEventListener("pagehide", saveReading); if (narrowThreads && narrowThreads.removeEventListener) narrowThreads.removeEventListener("change", adaptThreadChooser); saveDraft(); detachPet(); renameActive = false; renameInput.value = ""; mounted = false; draftListeners.delete(changed); ++navigation; ++snapshotGeneration; offBus(); offState(); help.stop(); approvalView.stop(); const l = document.getElementById("xc-live"); if (l) l.classList.remove("on"); };
+  const off = () => { recoveryWanted = null; ++pickerGeneration; saveReading(); if (hasDesktopPreferences()) window.removeEventListener("pagehide", saveReading); if (narrowThreads && narrowThreads.removeEventListener) narrowThreads.removeEventListener("change", adaptThreadChooser); saveDraft(); detachPet(); renameActive = false; renameInput.value = ""; mounted = false; draftListeners.delete(changed); ++navigation; ++snapshotGeneration; offBus(); offState(); help.stop(); approvalView.stop(); const l = document.getElementById("xc-live"); if (l) l.classList.remove("on"); };
+
 
   drawLog(); drawStatus(); drawApprovals(); drawSide();
   const asked = sessionStorage.getItem("xc-open");   // the Tasks page's Open button names a subagent's session (#97)
@@ -980,10 +1023,10 @@ export function mount(root, { pet = null } = {}) {
     if (!listReady) return;
     initialSelectionPending = false;
     if (draft(null).text || draft(null).pending) return;
-    if (hasDesktopPreferences()) {
-      if (savedThread && sessions.some(s => s.id === savedThread)) open(savedThread, savedScroll);
-      else saveDesktopPreferences({ thread: null, scroll: null });
-    } else if (sessions.length) open(sessions.some(s => s.id === lastThread) ? lastThread : sessions[0].id);
+    if (hasDesktopPreferences() && savedThread) {
+      // The list is bounded. Use normal open buffering; only an exact 404 disproves the saved pointer.
+      open(savedThread, initialReadingAllowed ? savedScroll : null, true);
+    } else if (!hasDesktopPreferences() && sessions.length) open(sessions.some(s => s.id === lastThread) ? lastThread : sessions[0].id);
   }
   refreshSessions().then(finishInitialSelection);
   return off;
