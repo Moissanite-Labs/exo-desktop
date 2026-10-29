@@ -13,8 +13,8 @@ import subprocess
 import sys
 import tempfile
 
-FORK = 'aska-digital/exo-desktop'
-UPSTREAM = 'aska-digital/exo'
+FORK = 'Moissanite-Labs/exo-desktop'
+UPSTREAM = 'Moissanite-Labs/exo'
 BRANCH = 'automation/exo-upstream-sync'
 MARKER = '<!-- exo-upstream-sync:v1 -->'
 TRAILER = 'Exo-Upstream-Sync: v1'
