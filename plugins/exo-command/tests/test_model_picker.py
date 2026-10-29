@@ -212,3 +212,58 @@ def test_providers_next_start_reply_is_not_shown_as_applied_now(page):
     key(page, 'Enter')
     page.wait('document.querySelector(".xc-model-status").textContent.includes("core will use it on next start")')
     assert page.eval('posts') == [{'path': '/api/providers/default', 'body': {'ref': 'beta:sonnet', 'role': 'main'}}]
+
+
+def mount_providers_with_model_reads(page, replies):
+    """Mount the Providers view; each /api/providers/models read answers with the next reply in turn."""
+    page.eval(r'''(async()=>{
+      window.modelReplies=''' + replies + r'''; window.modelReads=0;
+      window.fetch=async (path,opt={})=>{
+        let data={};
+        if(path.endsWith('/models'))data=modelReplies[Math.min(modelReads++,modelReplies.length-1)];
+        else if(path==='/api/providers')data={providers:[{provider:'local',needs:'cli',ready:true}],ready:true};
+        else if(path.endsWith('/test'))data={ok:true,latency_ms:1};
+        return {ok:true,status:200,json:async()=>data};
+      };
+      sessionStorage.setItem('xc-token','offline-test');
+      const root=document.createElement('main');document.body.replaceChildren(root);
+      const view=await import('/static/providers.js');
+      window.unmount=view.mount(root);
+    })()''')
+
+
+def click_button(page, text):
+    page.eval('[...document.querySelectorAll("button")].find(b=>b.textContent===' + repr(text) + ').click()')
+
+
+TRY_AGAIN = '[...document.querySelectorAll(".xc-prov-def button")].filter(b=>b.textContent==="Try again").length'
+DOWN = '{models:[],available:[],error:"Exo core is not reachable.",error_class:"transport",retryable:true}'
+
+
+def test_providers_model_list_failure_names_the_class_and_retries_only_a_transport_failure(page):
+    """D-091 in the search picker: a refusal shows its sentence with no retry; a transport failure offers one."""
+    refused = '{models:[],available:[],error:"The core refused this request.",error_class:"authority",retryable:false}'
+    mount_providers_with_model_reads(page, '[' + refused + ']')
+    page.wait('document.querySelector(".xc-model-status").textContent === "The core refused this request."')
+    assert page.eval(TRY_AGAIN) == 0
+    page.eval('unmount()')
+    good = "{models:[{route:'alpha:sonnet',name:'Sonnet'}],available:[]}"
+    mount_providers_with_model_reads(page, '[' + DOWN + ',' + good + ']')
+    page.wait('document.querySelector(".xc-model-status").textContent === "Exo core is not reachable."')
+    assert page.eval(TRY_AGAIN) == 1
+    click_button(page, 'Try again')
+    page.wait('document.querySelectorAll("[role=option]").length === 1')
+    assert page.eval(TRY_AGAIN) == 0 and page.eval('modelReads') == 2
+
+
+def test_providers_failed_reread_keeps_the_last_good_list(page):
+    """D-091: a failed read after a good one keeps the list usable and says it is the last good read."""
+    good = "{models:[{route:'alpha:sonnet',name:'Sonnet'}],available:[{route:'beta:sonnet',name:'Sonnet'}]}"
+    mount_providers_with_model_reads(page, '[' + good + ',' + DOWN + ']')
+    page.wait('document.querySelectorAll("[role=option]").length === 2')
+    click_button(page, 'Test')   # a provider test reloads the page data, so the list is read again
+    page.wait('!!document.querySelector(".xc-prov-def .xc-warn")')
+    assert page.eval('modelReads') == 2
+    assert page.eval('document.querySelector(".xc-prov-def .xc-warn").textContent') == (
+        "Exo core is not reachable. This list is from the last good read.")
+    assert page.eval('document.querySelectorAll("[role=option]").length') == 2 and page.eval(TRY_AGAIN) == 0
