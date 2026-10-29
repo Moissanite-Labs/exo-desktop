@@ -8,7 +8,7 @@ import subprocess
 
 # The overlay stylesheet is pinned: the verified runtime style.css plus patches/overlay-style.patch.
 OVERLAY_STYLE = 'cc38bd3af1cd6769b6f0894d7db1dd92a1060e0d2ac2a9c14f8368254431b823'
-p =argparse.ArgumentParser()
+p = argparse.ArgumentParser()
 p.add_argument('--plugins', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--with-model-picker', action='store_true', help='also overlay the searchable picker while preserving runtime-specific chat commands')
