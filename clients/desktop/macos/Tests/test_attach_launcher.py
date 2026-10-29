@@ -9,7 +9,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix="desktop fixture ") as tmp:
-    base = Path(tmp)
+    base = Path(tmp).resolve()
     fake = base / "fake exo"
     fake.write_text('#!' + sys.executable + '\nimport json, os, sys\nprint(json.dumps({"args": sys.argv[1:], "home": os.environ["EXO_HOME"], "seat": os.environ["EXO_SEAT"], "plugins": os.environ["EXO_PLUGIN_DIRS"], "url": os.environ.get("EXO_COMMAND_URL"), "cwd": os.getcwd()}))\n')
     fake.chmod(0o755)
@@ -24,6 +24,10 @@ with tempfile.TemporaryDirectory(prefix="desktop fixture ") as tmp:
         proc = subprocess.run([str(wrapper), 'web', '--port', '0', '--no-open'], env=env, capture_output=True, text=True, check=True)
         record = json.loads(proc.stdout)
         assert record == {'args': ['web', '--port', '0', '--no-open', '--socket', str(sockpath)], 'home': str(home), 'seat': 'canary', 'plugins': str(plugins), 'url': None, 'cwd': str(Path.home())}, record
+        # Resolve relative paths at generation, not against the later launch cwd/HOME.
+        subprocess.run([sys.executable, str(root / "make-launcher.py"), '--output', str(wrapper), '--exo', fake.name, '--attach-socket', sockpath.name, '--exo-home', home.name, '--plugins', plugins.name, '--seat', 'canary'], cwd=base, check=True)
+        relative = subprocess.run([str(wrapper), 'web', '--port', '0', '--no-open'], cwd='/', env=env, capture_output=True, text=True, check=True)
+        assert json.loads(relative.stdout) == record
         assert subprocess.run([str(wrapper), 'stop'], capture_output=True).returncode == 64
     sockpath.unlink()
     missing = subprocess.run([str(wrapper), 'web'], capture_output=True)

@@ -1,6 +1,7 @@
 #!/bin/sh
 # Local source install, isolated from ~/.exo and global exo launchers.
 set -eu
+invocation_dir=$PWD
 cd "$(dirname "$0")"
 repo=$(cd ../../.. && pwd)
 attached=false
@@ -18,6 +19,19 @@ while [ "$#" -gt 0 ]; do
   shift 2
 done
 if [ "$attached" = true ]; then
+  canonical_path() {
+    python3 - "$invocation_dir" "$1" <<'PYPATH'
+import os, sys
+print(os.path.realpath(os.path.join(sys.argv[1], os.path.expanduser(sys.argv[2]))))
+PYPATH
+  }
+  [ -n "$exo" ] && [ -n "$socket" ] && [ -n "$exo_home" ] && [ -n "$plugins" ] || {
+    echo 'Attached mode requires explicit runtime paths.' >&2; exit 64;
+  }
+  exo=$(canonical_path "$exo")
+  socket=$(canonical_path "$socket")
+  exo_home=$(canonical_path "$exo_home")
+  plugins=$(canonical_path "$plugins")
   [ -n "$exo" ] && [ -x "$exo" ] && [ -S "$socket" ] && [ -n "$exo_home" ] && [ -n "$seat" ] && [ -f "$plugins/exo-command/exo_command/__init__.py" ] || {
     echo 'Attached mode needs an executable --exo, live --attach-socket, --exo-home, --seat and --plugins containing exo-command.' >&2; exit 64;
   }
