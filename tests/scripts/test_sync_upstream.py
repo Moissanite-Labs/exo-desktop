@@ -209,6 +209,7 @@ def test_workflow_has_fixed_main_token_draft_concurrency_and_pinned_checkout():
     assert 'ref: main' in workflow and 'persist-credentials: false' in workflow
     assert 'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5' in workflow
     assert 'cancel-in-progress: false' in workflow and 'EXO_SYNC_TOKEN' in workflow
+    assert "github.repository == 'Moissanite-Labs/exo-desktop'" in workflow
     assert "vars.EXO_SYNC_ENABLED == 'true'" in workflow
     assert 'secrets.GITHUB_TOKEN' not in workflow and 'git push origin main' not in workflow
 
@@ -353,3 +354,11 @@ def test_branch_change_during_metadata_edit_is_not_reported_as_success(repos):
     instance.gh = edit_then_human
     failure(instance, 'branch-drift')
     assert git(fork, 'rev-parse', 'refs/heads/' + sync.BRANCH) == human_head
+
+
+def test_transferred_repository_targets_are_explicit():
+    assert sync.FORK == 'Moissanite-Labs/exo-desktop'
+    assert sync.UPSTREAM == 'Moissanite-Labs/exo'
+    config = sync.Config(Path('/synthetic/work'))
+    assert config.fork_url == 'https://github.com/Moissanite-Labs/exo-desktop.git'
+    assert config.upstream_url == 'https://github.com/Moissanite-Labs/exo.git'

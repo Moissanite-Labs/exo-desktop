@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   sync:
-    if: github.repository == 'aska-digital/exo-desktop' && (github.event_name == 'workflow_dispatch' || vars.EXO_SYNC_ENABLED == 'true')
+    if: github.repository == 'Moissanite-Labs/exo-desktop' && (github.event_name == 'workflow_dispatch' || vars.EXO_SYNC_ENABLED == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
