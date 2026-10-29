@@ -11,6 +11,7 @@ This branch tests desktop integration with pending shared changes. It does not u
 | Native confirmations | `923860a6a8dd1dd0f1ff530b0562c929e84d4350` |
 | Web preferences | `1103f530ea8e1acd58caf817addfddccc299a591` |
 | Cached-provider retry | `d32b6d2f624cd1a562c3ec2919afbc53b4535bb8` |
+| Shared combination | `9ade86146a973b0ceacf5ad3608918f61915fe69` |
 | Certificate lock repair | `568b903fc45984052b888636ef53647c2a10a38f` |
 | Companion | `d911b390e989d1bbb33bc7c3fce3e2094f9ff5a9` |
 
@@ -29,9 +30,9 @@ The harness compiles the actual app controller and uses its HTTP verification an
 
 ## Evidence
 
-The full exo-command suite passed 480 tests in 151.96 seconds on `a1d6b16a186cf8f834f759df00973276f0305f9e`. Later changes affect provider retry, conversation restoration and native context checks. Their focused checks are separate from that earlier full run.
+The complete exo-command suite passed **495 tests in 153.90 seconds** on `d58166bc47e1eb479fe151203a52b7b575b5e30f`. Consuming the canonical combination history preserved the full production and test subtrees. The one obsolete desktop picker expectation now checks the new cached retry and successful recovery.
 
-The preference, provider and companion-selection checks passed 36 focused tests. Native checks cover two processes, separate local ports, page reload and preservation after an initial list failure. Return and Escape cancel the native dialog. Changed page context refuses Continue.
+Focused checks passed 36 tests. Actual WKWebView checks cover early Off before bootstrap, an initial list error, an older thread outside the list and a live event during the saved snapshot read. They also verify reload and relaunch on another local port. Return and Escape cancel the native dialog. Changed page context refuses Continue.
 
 The native context test uses embedded app metadata. The intended context enables restoration. A changed home, explicit executable override or missing bundled launcher refuses it. A PATH fixture verifies that launcher generation fixes the executable before a later launch from another directory.
 

@@ -11,6 +11,7 @@ This branch combines native confirmations and saved display choices with pending
 | Growth and companion | `d911b390e989d1bbb33bc7c3fce3e2094f9ff5a9` | Pending [canonical review](https://github.com/Moissanite-Labs/exo/pull/826). Shared core, API and web source belong there. |
 | Native web preference consumer | `1103f530ea8e1acd58caf817addfddccc299a591` | Pending [canonical review](https://github.com/Moissanite-Labs/exo/pull/933). Failed reads preserve saved intent. Exact lookup restores an older thread outside the bounded list. Confirmed 404 clears it. |
 | Cached provider-list retry | `d32b6d2f624cd1a562c3ec2919afbc53b4535bb8` | Pending [canonical review](https://github.com/Moissanite-Labs/exo/pull/932). The existing desktop search picker keeps one retry button for a cached transport failure and none for an authority refusal. |
+| Shared companion and preference combination | `9ade86146a973b0ceacf5ad3608918f61915fe69` | [Canonical combination](https://github.com/Moissanite-Labs/exo/commit/9ade86146a973b0ceacf5ad3608918f61915fe69). Owns the confirmed-404 companion reset and its combined browser test. |
 | Certificate trust roots | `568b903fc45984052b888636ef53647c2a10a38f` | [Canonical security change](https://github.com/Moissanite-Labs/exo/pull/937). The lock selects certifi 2026.10.23. A separate desktop branch carries only this lock repair from main. |
 | Native preference bridge | `5838a68ea0b40813b16be37e6aee82268602f747` | [Desktop review](https://github.com/Moissanite-Labs/exo-desktop/pull/98). The [original restoration proposal](https://github.com/Moissanite-Labs/exo-desktop/pull/49) and its author branch remain intact. |
 | Native confirmations | `923860a6a8dd1dd0f1ff530b0562c929e84d4350` | [Desktop review](https://github.com/Moissanite-Labs/exo-desktop/pull/96). Preserves the source history and adds Return/Escape cancellation and refusal after the presenting page changes. |
@@ -19,7 +20,7 @@ The shared changes above are temporary copies for review. An official sync requi
 
 ## Composition
 
-Shared web source comes from canonical Exo. Native code stays under `clients/desktop`. The merge keeps the desktop model picker, companion cleanup and reading-position guards together. The provider fix changes only the cached-error path and does not save a model default. The new missing-thread handler also resets companion selection. This combination hook requires comparison with canonical source during the official sync.
+Shared web source comes from canonical Exo. Native code stays under `clients/desktop`. The merge keeps the desktop model picker, companion cleanup and reading-position guards together. The provider fix changes only the cached-error path and does not save a model default. The canonical combination resets companion selection when the missing-thread handler clears it.
 
 The browser keeps page data in memory and the server chooses an available local port. Native storage accepts only the listed display fields from the connected main frame. Saved choices belong to the configured runtime identity. Tokens, credentials, drafts and transcript content do not enter that copy.
 
