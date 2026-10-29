@@ -67,11 +67,11 @@ def main(argv=None) -> int:
             result = setup.remove(home, a.seat)
         else:
             env = auth.child_env(scrub_env(), home, a.seat)
-            proc = subprocess.run(['gh', 'api', 'user', '--hostname', auth.binding(home, a.seat).get('host', a.host), '--jq', '.login'], env=env,
-                                  capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL)
-            result = {'seat': a.seat, 'ok': proc.returncode == 0}
-            if proc.returncode == 0:
-                result['login'] = keys.redact_secrets(proc.stdout.strip())
+            probe = subprocess.run(['gh', 'api', 'user', '--hostname', auth.binding(home, a.seat).get('host', a.host), '--jq', '.login'], env=env,
+                                   capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL)
+            result = {'seat': a.seat, 'ok': probe.returncode == 0}
+            if probe.returncode == 0:
+                result['login'] = keys.redact_secrets(probe.stdout.strip())
             else:
                 result['error'] = 'GitHub authentication test failed; check token, permissions and hostname'
         print(json.dumps(result))
