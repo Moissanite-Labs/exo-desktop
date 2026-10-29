@@ -18,9 +18,10 @@ source = a.plugins.resolve()
 target = a.output.resolve()
 if target.exists() or not (source / 'exo-command/exo_command/service.py').is_file():
     p.error('output must not exist and plugins must contain exo-command')
-expected = {'server.py': '468e418162677248da50e1724f4587497af53026c672a9825aa63503f344eaf7', 'service.py': 'c103e41c3f08212664b4fb459876a1e5d2bede35d9cec2fed1460d5de29f33e7'}
-for name, digest in expected.items():
-    if hashlib.sha256((source / 'exo-command/exo_command' / name).read_bytes()).hexdigest() != digest:
+# server.py: the verified runtime (exo f9d1e423), then exo main's file (blob 1275f85d, unchanged from #757 through 938b027a).
+expected = {'server.py': ['468e418162677248da50e1724f4587497af53026c672a9825aa63503f344eaf7', '835a0fb6d35c187b9c6f1d9879e594d86d40c9ceb0d2601609b512a8a740a2a1'], 'service.py': ['c103e41c3f08212664b4fb459876a1e5d2bede35d9cec2fed1460d5de29f33e7']}
+for name, digests in expected.items():
+    if hashlib.sha256((source / 'exo-command/exo_command' / name).read_bytes()).hexdigest() not in digests:
         p.error('selected web implementation differs from the verified replay-fix baseline: ' + name)
 if source in target.parents or target in source.parents:
     p.error('output must be separate from the selected plugins')
