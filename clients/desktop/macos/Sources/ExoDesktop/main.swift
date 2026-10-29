@@ -1,10 +1,12 @@
 import AppKit
 import WebKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var window: NSWindow?
     private var webView: WKWebView?
     private var origin: URL?
+    private var headerRects: [NSRect] = []
+    private var dragMonitor: Any?
     private var launcher = ExoWebLauncher()
     private var isAttached: Bool { Bundle.main.object(forInfoDictionaryKey: "ExoAttachedCore") as? Bool == true }
     private var transitioning = false
@@ -15,10 +17,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         NSApp.setActivationPolicy(.regular)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = NSColor(srgbRed: 8 / 255, green: 9 / 255, blue: 10 / 255, alpha: 1)
+        window.appearance = NSAppearance(named: .darkAqua)
         window.center()
         window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Exo"
         window.makeKeyAndOrderFront(nil)
@@ -26,21 +32,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        configuration.userContentController.add(self, name: "headerGeometry")
+        configuration.userContentController.addUserScript(WKUserScript(source: """
+            (() => {
+                let pending = false;
+                const update = () => {
+                    pending = false;
+                    const nav = document.querySelector('.xc-nav');
+                    if (!nav) return;
+                    // DOM style properties also work with the page's strict CSP.
+                    if (nav.style.paddingLeft !== '84px')
+                        nav.style.setProperty('padding-left', '84px', 'important');
+                    const rect = el => {
+                        const r = el.getBoundingClientRect();
+                        return [r.x, r.y, r.width, r.height];
+                    };
+                    window.webkit.messageHandlers.headerGeometry.postMessage([
+                        rect(nav), ...Array.from(nav.querySelectorAll(
+                            'button,a,input,select,textarea,[role="button"],[contenteditable]'
+                        ), rect)
+                    ]);
+                };
+                const schedule = () => {
+                    if (!pending) { pending = true; requestAnimationFrame(update); }
+                };
+                new MutationObserver(schedule).observe(document.body,
+                    {childList: true, subtree: true, attributes: true});
+                window.addEventListener('resize', schedule);
+                document.addEventListener('scroll', schedule, true);
+                schedule();
+            })();
+            """, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let webView = WKWebView(frame: window.contentView?.bounds ?? .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.autoresizingMask = [.width, .height]
+        webView.underPageBackgroundColor = window.backgroundColor
         window.contentView?.addSubview(webView)
         self.webView = webView
+        dragMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self, event.window === self.window, let view = self.webView,
+                  let header = self.headerRects.first else { return event }
+            let local = view.convert(event.locationInWindow, from: nil)
+            let point = NSPoint(x: local.x, y: view.isFlipped ? local.y : view.bounds.height - local.y)
+            guard point.x >= 80, header.contains(point),
+                  !self.headerRects.dropFirst().contains(where: { $0.contains(point) }) else { return event }
+            self.window?.performDrag(with: event)
+            return nil
+        }
 
         buildMenu()
         NSApp.activate(ignoringOtherApps: true)
         startServer()
     }
 
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "headerGeometry", message.frameInfo.isMainFrame,
+              let url = message.frameInfo.request.url, let origin,
+              url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port,
+              let rows = message.body as? [[Double]], rows.count < 100,
+              rows.allSatisfy({ $0.count == 4 && $0.allSatisfy(\.isFinite) }) else { return }
+        headerRects = rows.map { NSRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) }
+    }
+
     private func startServer() {
         guard !terminating, let webView else { return }
         transitioning = true
+        headerRects = []
         let currentLauncher = launcher
         webView.loadHTMLString("<html><body style=\"font:20px -apple-system;padding:48px\">Starting Exo…</body></html>", baseURL: nil)
         launcher.onExit = { [weak self, weak currentLauncher] _ in
@@ -168,6 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard !isAttached else { return }
         guard !terminating, !transitioning, !showingFailure else { return }
         transitioning = true
+        headerRects = []
         let currentLauncher = launcher
         currentLauncher.stopWebServer {
           currentLauncher.stopCore { code in
