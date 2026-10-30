@@ -97,3 +97,9 @@ Quit the isolated app. To stop its alpha core left running, run:
 Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*` backups. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
 
 This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.
+
+The native shell answers JavaScript confirmation and alert requests from the connected main-frame origin. Confirmations default to Cancel; Continue returns approval to the page. Child frames and other origins cannot open a native dialog. Native sheet interaction still requires macOS acceptance testing before this draft is considered ready.
+
+### Disposable native dialog acceptance
+
+`python3 clients/desktop/macos/Tests/test_native_dialog_acceptance.py` compiles the production delegate into a temporary executable and opens a fixture WKWebView on a Mac graphical session. It operates the real Cancel and Continue sheet buttons, dispatches Return and Escape through AppKit to the disposable sheet (both cancel), and verifies restart, wrong-origin and subframe requests are refused. The harness uses a temporary home and local fixture server; it does not install the app, launch an Exo core or use credentials. The process-local Escape monitor is restricted to the active confirmation sheet and removed when it completes. This does not replace manual VoiceOver acceptance.
