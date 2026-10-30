@@ -42,7 +42,14 @@ final class ExoWebLauncher: @unchecked Sendable {
     private var finished = false
     private var hasPage = false
     private var stopping = false
+    private var shutdownInProgress = false
+    private var shutdownCompletions: [@Sendable () -> Void] = []
     var onExit: ((Int32) -> Void)?
+    private let startupTimeout: TimeInterval
+
+    init(startupTimeout: TimeInterval = 30) {
+        self.startupTimeout = startupTimeout
+    }
 
     private var environment: [String: String] {
         var env = ProcessInfo.processInfo.environment
@@ -126,14 +133,32 @@ final class ExoWebLauncher: @unchecked Sendable {
             finish(with: .failure(.launchFailed))
             return
         }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [weak self] in
-            guard let self = self else { return }
-            self.lock.lock()
-            let alreadyFinished = self.finished
-            self.lock.unlock()
-            guard !alreadyFinished else { return }
-            self.process?.terminate()
-            self.finish(with: .failure(.timedOut))
+        DispatchQueue.global().asyncAfter(deadline: .now() + startupTimeout) { [weak self] in
+            self?.timeOut()
+        }
+    }
+
+    private func timeOut() {
+        lock.lock()
+        guard !finished else { lock.unlock(); return }
+        // Claim the result before signalling the child: its termination handler
+        // must not replace the timeout with an exit error or a late URL.
+        finished = true
+        stopping = true
+        output = ""
+        lock.unlock()
+        // Adapt the bounded signal escalation pattern in OpenCode's service
+        // lifecycle (no code copied): anomalyco/opencode at
+        // 9425a65eb358e06221e4982d5620c50fbd86a1dd,
+        // packages/client/src/effect/service.ts, terminate(). Unlike that
+        // service, this process is the web child owned by this launcher.
+        // Let cleanup finish before offering Retry.
+        stopWebServer { [self] in
+            lock.lock()
+            let completion = startCompletion
+            startCompletion = nil
+            lock.unlock()
+            completion?(.failure(.timedOut))
         }
     }
 
@@ -141,12 +166,20 @@ final class ExoWebLauncher: @unchecked Sendable {
     /// Sends SIGINT, waits up to five seconds on a semaphore, then forces
     /// termination if the server is still running.
     func stopWebServer(completion: @Sendable @escaping () -> Void) {
+        lock.lock()
+        if shutdownInProgress {
+            shutdownCompletions.append(completion)
+            lock.unlock()
+            return
+        }
         guard let proc = process, proc.isRunning else {
+            lock.unlock()
             completion()
             return
         }
-        lock.lock()
         stopping = true
+        shutdownInProgress = true
+        shutdownCompletions.append(completion)
         lock.unlock()
         DispatchQueue.global().async {
             proc.interrupt()
@@ -156,7 +189,12 @@ final class ExoWebLauncher: @unchecked Sendable {
             if proc.isRunning { kill(proc.processIdentifier, SIGKILL) }
             self.wait(proc, seconds: 1)
             self.clearPipes()
-            completion()
+            self.lock.lock()
+            let completions = self.shutdownCompletions
+            self.shutdownCompletions = []
+            self.shutdownInProgress = false
+            self.lock.unlock()
+            completions.forEach { $0() }
         }
     }
 
