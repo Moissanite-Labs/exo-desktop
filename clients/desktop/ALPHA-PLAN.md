@@ -58,3 +58,9 @@ Treat the separate reported release-build startup race as an investigation item.
 ## Release boundary
 
 The replay freeze is fixed in `9be0eb22` on the alpha branch. The three items above are planned work, not features delivered by that fix. Notarization, automatic updates and distribution beyond this local pilot remain later release work.
+
+## Quit consent and remaining pause integration (#92)
+
+The native quit path now defaults to Keep Open and explicitly says the shared core and active agent work remain running, including possible paid model calls. Quit and Keep Running preserves intentionally unattended sessions. Cancelling the quit returns without shutting down the web connection.
+
+This is a partial repair. A native action that safely pauses the relevant active work without killing the shared core remains unimplemented; the shared session and authority boundary needs independent review. Users can keep the window open and cancel a turn in Chat. This change does not cancel other sessions or claim to stop provider-side work already submitted. Native dialog interaction remains manual acceptance.

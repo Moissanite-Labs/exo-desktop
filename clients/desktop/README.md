@@ -97,3 +97,5 @@ Quit the isolated app. To stop its alpha core left running, run:
 Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*` backups. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
 
 This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.
+
+Quitting the macOS app asks whether to keep the window open or quit while leaving agent work running. The default keeps it open. Active turns can continue paid calls after quitting; cancel a turn in Chat first if you want to stop it. This warning does not provide a native pause-all action.
