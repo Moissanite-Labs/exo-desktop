@@ -68,7 +68,7 @@ def _token(home: str | Path, seat: str, meta: dict) -> str | None:
         name = account(home, seat, meta['host'])
         readers = {'keychain': keys.keychain_get, 'secret-service': keys.secret_service_get,
                    'file': keys.file_get}
-        reader = readers.get(meta.get('store'))
+        reader = readers.get(meta.get('store', ''))
         value = reader(name) if reader else None
         if value:
             keys.remember_secret(value)
