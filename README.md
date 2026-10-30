@@ -109,6 +109,15 @@ Commands you will use in the terminal (`/help` lists all): `/new`, `/sessions`, 
 `/context`, `/compact`, `/model`, `/default`, `/usage`, `/trace`, `/findings`, `/peers`, `/send`, `/handoff`,
 `/intro`, `/tutorial`.
 
+## Desktop app (macOS alpha)
+
+This fork, [Exo Desktop](https://github.com/Moissanite-Labs/exo-desktop), also builds a macOS window around the web client. The native shell lives in [`clients/desktop`](clients/desktop/README.md). It is a source-built local alpha with ad hoc signing, and it needs macOS 13 or later, the Xcode command line tools and `uv`. `scripts/install.sh` does not build it: that script installs the core and the terminal client only.
+
+    git clone https://github.com/Moissanite-Labs/exo-desktop && cd exo-desktop
+    clients/desktop/macos/install-local-alpha.sh
+
+The app keeps its own data home and leaves `~/.exo` alone unless you attach it to a running core. Options, attaching to an existing core and the current limits are in [`clients/desktop/README.md`](clients/desktop/README.md).
+
 ## Versions
 
 Exo 0.2.0 (egg). Each major version has a codename from the exopet line: egg, cell, tile, cube, frame, then 4D and up.

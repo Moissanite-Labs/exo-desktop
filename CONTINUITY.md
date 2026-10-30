@@ -12,6 +12,8 @@ A parent branch, repository main and an installed runtime are different states. 
 
 Fork-only native work can be proposed upstream from current Exo main with only the reviewed native changes. A PR from fork main carries all fork history and cannot promise desktop files only.
 
+This fork publishes no wheel. A wheel built from this checkout has the same distribution name and version as canonical Exo's (`exo` 0.2.0) and packages only `src/exo` and `clients/tui/exo_tui`, so it is deliberately not distinguishable from one built there. `pyproject.toml` is shared with canonical Exo, so a fork marker would be a shared change made there first. The desktop app is built from `clients/desktop`, not from the wheel.
+
 ## Prepare a draft sync
 
 The helper uses a new private Git directory and the reserved `automation/exo-upstream-sync` branch. It makes normal merges, preserves history and creates or reuses an owned draft PR targeting fork main. It never pushes main, force-pushes, executes fetched code or tests, merges a PR, installs an app or restarts a core.
