@@ -84,6 +84,11 @@ def test_empty_loading_error_and_pending_duplicate_guards(page):
     assert page.eval('document.querySelector("[role=status]").textContent.includes("No models listed")')
 
 
+# The page fixture also boots the chat view, whose status refreshes (`/command` context, findings) can land after
+# mount_view swaps in its fetch. Count only the Providers view's own writes.
+PROVIDER_POSTS = 'posts.filter(p=>p.path.startsWith("/api/providers/"))'
+
+
 def mount_view(page, view, applied='true'):
     page.eval(r'''(async()=>{
       window.posts=[];
@@ -111,10 +116,10 @@ def test_providers_search_saves_exact_default_only_after_enter(page):
     mount_view(page, 'providers')
     page.wait('!!document.querySelector("[role=combobox]")')
     search(page, 'beta sonnet')
-    assert page.eval('posts.length') == 0
+    assert page.eval(PROVIDER_POSTS + '.length') == 0
     key(page, 'Enter')
-    page.wait('posts.length === 1')
-    assert page.eval('posts') == [{'path': '/api/providers/default', 'body': {'ref': 'beta:sonnet', 'role': 'main'}}]
+    page.wait(PROVIDER_POSTS + '.length === 1')
+    assert page.eval(PROVIDER_POSTS) == [{'path': '/api/providers/default', 'body': {'ref': 'beta:sonnet', 'role': 'main'}}]
     page.wait('document.querySelector(".xc-model-status").textContent.includes("Default set")')
 
 
@@ -242,7 +247,7 @@ def test_providers_next_start_reply_is_not_shown_as_applied_now(page):
     search(page, 'beta')
     key(page, 'Enter')
     page.wait('document.querySelector(".xc-model-status").textContent.includes("core will use it on next start")')
-    assert page.eval('posts') == [{'path': '/api/providers/default', 'body': {'ref': 'beta:sonnet', 'role': 'main'}}]
+    assert page.eval(PROVIDER_POSTS) == [{'path': '/api/providers/default', 'body': {'ref': 'beta:sonnet', 'role': 'main'}}]
 
 
 def mount_providers_with_model_reads(page, replies):
