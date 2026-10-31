@@ -79,7 +79,8 @@ class Client:
         """One JSON round trip. Returns (status, parsed body)."""
         headers = {"Content-Type": "application/json", "User-Agent": f"exo-bus-client/1 ({self.seat or 'anon'})"}
         if auth:
-            headers.update(wire.request_headers(self.seat, self.key, method, path.split("?")[0]))
+            p, _, q = path.partition("?")
+            headers.update(wire.request_headers(self.seat, self.key, method, p, query=q))
         req = urllib.request.Request(self.url + path, method=method, headers=headers,
                                      data=wire.canonical(body) if body is not None else None)
         try:
