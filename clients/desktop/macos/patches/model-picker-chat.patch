@@ -1,7 +1,5 @@
-diff --git a/plugins/exo-command/exo_command/static/chat.js b/plugins/exo-command/exo_command/static/chat.js
-index 7643abc1..b4638fc9 100644
---- a/plugins/exo-command/exo_command/static/chat.js
-+++ b/plugins/exo-command/exo_command/static/chat.js
+--- chat.js
++++ chat.js
 @@ -2,6 +2,7 @@
  // composer, and the side panel area on the right. All state comes from /api/chat/* and the /api/events stream.
  import { h, api, short, when, partsText, tag, empty } from "./dom.js";
@@ -10,7 +8,7 @@ index 7643abc1..b4638fc9 100644
  import { renderMarkdown } from "./markdown.js";
  import { renderPanel } from "./panels.js";
  import { createHero } from "./hero.js";
-@@ -16,6 +17,9 @@ export function mount(root) {
+@@ -17,6 +18,9 @@
    let sessions = [], current = null, items = [], busy = false, loadedSeq = 0, loading = false, pending = [];
    let approvals = {}, steers = {}, gone = new Set(), panelsOpen = bus.openPanels(), notice = "", model = "", cost = null;
    let capacity = null, capacities = {}, snapshotGeneration = 0, pickerGeneration = 0, changingModel = false;
@@ -20,7 +18,7 @@ index 7643abc1..b4638fc9 100644
    let requested = "", ctxTokens = null, cacheShare = null, ctx = null, findings = null, calls = [], costSeen = false;   // instruments from model.call and usage.updated
    const seen = new Set();   // panels already reported as opened
    const landed = new Set();   // user messages the core has added to a conversation
-@@ -142,11 +146,17 @@ export function mount(root) {
+@@ -143,11 +147,17 @@
          flash(b.text); return;
        default: break;
      }
@@ -40,7 +38,7 @@ index 7643abc1..b4638fc9 100644
          const tm = b.timing || {};
          help.note({ busy: false, turns: items.filter((i) => i.kind === "user").length, longTurn: (tm.wall_ms || 0) - (tm.tool_ms || 0) - (tm.approval_ms || 0) >= 60000 });
          break;
-@@ -353,9 +363,34 @@ export function mount(root) {
+@@ -354,9 +364,34 @@
        h("button", { class: "xc-btn", onclick: () => { it.editing = false; redraw(it); } }, "Cancel"))));
    }
 
@@ -68,7 +66,7 @@ index 7643abc1..b4638fc9 100644
      const cell = (label, ...v) => h("span", null, h("span", { class: "xc-i" }, label), h("span", { class: "xc-v" }, ...v));
 -    const out = [h("span", { class: "xc-state" + (busy ? " on" : "") }, h("span", { class: "xc-dot" + (busy ? " on" : "") }), busy ? "working" : "idle")];
 +    const confirmedBusy = busy && coreUsable && activityFresh;
-+    const activity = busy ? "working" : "idle";
++    const activity = busy ? (waitingForApproval(current) ? "waiting for approval" : "working") : "idle";
 +    const stateText = !coreUsable ? (!webUsable ? "web reconnecting" : coreState === "connecting" ? "connecting to core" : "core unavailable") + " · last known " + activity
 +      : !activityFresh ? (loading ? "checking activity" : "activity unavailable") + " · last known " + activity : activity;
 +    const out = [h("span", { class: "xc-state" + (confirmedBusy ? " on" : "") }, h("span", { class: "xc-dot" + (confirmedBusy ? " on" : "") }), stateText)];
@@ -76,7 +74,7 @@ index 7643abc1..b4638fc9 100644
      if (model) {
        const fell = requested && requested !== model;
        const m = cell("model", model);
-@@ -372,14 +407,16 @@ export function mount(root) {
+@@ -373,14 +408,16 @@
      if (cacheShare != null) out.push(h("span", { class: "xc-opt" }, h("span", { class: "xc-i" }, "cache"), h("span", { class: "xc-v" }, Math.round(cacheShare * 100) + "%")));
      if (findings != null) out.push(h("span", { class: "xc-opt" }, h("span", { class: "xc-i" }, "findings"), h("span", { class: "xc-v" + (findings ? " xc-via" : "") }, String(findings))));
      if (cost != null || costSeen) out.push(cell("cost", cost != null ? money(cost) : "unknown"));
@@ -98,7 +96,40 @@ index 7643abc1..b4638fc9 100644
    }
    function money(v) { return "$" + v.toFixed(v < 1 ? 3 : 2); }
    function fmtTok(n) { return n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n); }
-@@ -437,7 +474,18 @@ export function mount(root) {
+@@ -391,20 +428,30 @@
+     el.replaceChildren(...(s ? [h("b", null, s.agent || s.seat || "exo"), " \u00B7 " + short(s.title || s.id, 36)] : []));
+   }
+
++  function waitingForApproval(session) {
++    return Object.values(approvals).some((a) => !a.session || a.session === session);
++  }
++
++  function sessionPhase(session) {
++    if (session.status !== "live") return "";
++    const phase = waitingForApproval(session.id) ? "waiting for approval" : "running";
++    return !coreUsable || (session.id === current && !activityFresh) ? "last known " + phase : phase;
++  }
++
+   function drawSessions() {
+-    const waiting = new Set(Object.values(approvals).map((a) => a.session));
+     listEl.replaceChildren(...(sessions.length ? sessions.map((s) =>
+       h("button", { class: "xc-sess" + (s.id === current ? " on" : ""), onclick: () => open(s.id),
+         title: "Double-click to rename (also /rename <title>)",
+         ondblclick: () => { const t = window.prompt("Rename thread", s.title || ""); if (t !== null) rename(s.id, t); } },
+         h("span", { class: "xc-sess-title" }, short(s.title || s.id, 40)),
+-        h("span", { class: "xc-dim" }, [s.status === "live" ? "running" : "", waiting.has(s.id) ? h("span", { class: "xc-needs" }, "needs you") : "", when(s.updated)].filter(Boolean).flatMap((x, i) => (i ? [" \u00B7 ", x] : [x]))))) : [empty("No threads yet.")]));
++        h("span", { class: "xc-dim" }, [sessionPhase(s), waitingForApproval(s.id) ? h("span", { class: "xc-needs" }, "needs you") : "", when(s.updated)].filter(Boolean).flatMap((x, i) => (i ? [" \u00B7 ", x] : [x]))))) : [empty("No threads yet.")]));
+     drawWhere();
+   }
+
+   function drawApprovals() {
+     const mine = Object.values(approvals).filter((a) => !a.session || a.session === current);   // no session: every thread, as in the terminal client
+     approvalView.draw(mine);
++    drawStatus();
+   }
+
+   function gaugeRow(label, n, max, hot) {
+@@ -438,7 +485,18 @@
    // ---------------------------------------------------------------- actions
 
    async function refreshSessions() {
@@ -118,7 +149,7 @@ index 7643abc1..b4638fc9 100644
    }
 
    async function open(id) {
-@@ -445,7 +493,9 @@ export function mount(root) {
+@@ -446,7 +504,9 @@
      modelPicker.replaceChildren();
      const generation = ++snapshotGeneration, had = Object.keys(steers);
      capacity = null;
@@ -129,7 +160,7 @@ index 7643abc1..b4638fc9 100644
      drawSessions(); drawLog(); drawApprovals(); drawSide(); drawSteers();
      try {
        const d = await api("GET", "/api/chat/sessions/" + encodeURIComponent(id));
-@@ -453,20 +503,27 @@ export function mount(root) {
+@@ -454,20 +514,27 @@
        items = fromMessages(d.messages || []);
        dropSteers(id, had, d.steers);
        loadedSeq = d.seq || 0;
@@ -166,18 +197,19 @@ index 7643abc1..b4638fc9 100644
      try {
        const freshSessions = (await api("GET", "/api/chat/sessions")).sessions || [];
        const d = id ? await api("GET", "/api/chat/sessions/" + encodeURIComponent(id)) : null;
-@@ -476,11 +533,15 @@ export function mount(root) {
+@@ -477,11 +544,15 @@
          items = mergeTranscript(fromMessages(d.messages || []), items);
          dropSteers(id, had, d.steers);
          loadedSeq = Math.min(cutoff, d.seq || 0);
 -        busy = sessions.some((s) => s.id === id && s.status === "live");
 -        model = d.session.model || model;
+-      }
 +        const live = sessions.find(s => s.id === id);
 +        setBusy(snapshotBusy(d.session, live));
 +        if (d.session) rememberStatus(id, d.session.status);
 +        activityFresh = coreUsable;
 +        model = (d.session && d.session.model) || model;
-       }
++      }
 +      if (!id) activityFresh = coreUsable;
        panelsOpen = bus.openPanels();
 -    } catch (e) { fail(e); }
@@ -185,7 +217,7 @@ index 7643abc1..b4638fc9 100644
      finally {
        if (id === current && generation === snapshotGeneration) {
          loading = false; drawSessions(); drawLog(); drawStatus(); drawSide();
-@@ -524,7 +585,7 @@ export function mount(root) {
+@@ -525,7 +596,7 @@
    function closePicker() { modelPicker.hidden = true; ++pickerGeneration; input.focus(); }
 
    // One model change at a time: send() and the picker wait for it, so a second Enter is not a second models.set.
@@ -194,7 +226,7 @@ index 7643abc1..b4638fc9 100644
      changingModel = true;
      try {
        if (defaults) await api("POST", "/api/providers/default", { ref, role: "main" });
-@@ -534,6 +595,7 @@ export function mount(root) {
+@@ -535,6 +606,7 @@
        throw lan ? Error("/default saves provider settings, which only a page opened at 127.0.0.1 or localhost may change (D-034). /model works here.") : e;
      } finally { changingModel = false; }
      if (!defaults && current === sid) { model = ref; capacity = capacities[ref] || null; requested = ""; drawStatus(); }
@@ -202,7 +234,7 @@ index 7643abc1..b4638fc9 100644
      closePicker();
      await refreshSessions();
      flash((defaults ? "Default model: " : "Main model: ") + ref);
-@@ -544,31 +606,31 @@ export function mount(root) {
+@@ -545,31 +617,31 @@
      if (!defaults && !sid) { flash("open a thread first for /model; /default sets the model for new threads"); return; }
      try {
        if (args) { await chooseModel(args, defaults, sid); return true; }
@@ -253,7 +285,7 @@ index 7643abc1..b4638fc9 100644
      const text = input.value.trim();
      if (!text) return;
      if (changingModel) { flash("changing the model; send again when it is done"); return; }
-@@ -709,9 +771,18 @@ export function mount(root) {
+@@ -721,9 +793,19 @@
    const offBus = bus.on(handle);
    let synced = bus.lastSeq() ? -1 : 0;
    const offState = bus.onState((st) => {
@@ -265,6 +297,7 @@ index 7643abc1..b4638fc9 100644
 +      coreState = st.core_state || (coreUsable ? "connected" : "unavailable");
 +      if (!coreUsable || !wasUsable) activityFresh = false;
 +      drawStatus();
++      if (wasUsable !== coreUsable) drawSessions();
 +    }
 +    const restored = coreUsable && !wasUsable && st.synced > 0;
 +    if (st.synced !== synced || restored) { synced = st.synced; recover(); }
