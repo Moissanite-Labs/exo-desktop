@@ -87,3 +87,7 @@ Quit the isolated app. To stop its alpha core left running, run:
 Then remove `~/Applications/Exo Desktop Alpha.app` and its optional `.previous.*` backups. To erase alpha sessions, identity and configuration, also remove `~/Library/Application Support/Exo Desktop Alpha`. This is permanent. Keep any workspace files you need before deleting that folder. Normal `~/.exo` data and CLI provider logins are separate.
 
 This is a local source alpha with ad hoc signing. It has no notarization, automatic updater or portable bundled Python runtime. macOS distribution and Windows/Linux clients remain separate work.
+
+Pane layout controls can hide the thread and detail panes, move any pane left or right, and resize side panes with keyboard-accessible sliders. The conversation stays visible. Reset panes restores the original order and widths. Layout changes move the existing view nodes, preserving the composer and live stream.
+
+The native app stores only validated pane order, visibility and widths in its own preferences. Its bridge accepts the current launcher origin and main frame only. Ordinary browsers use local storage for the same bounded schema. These preferences contain no conversation content or credentials. The optional `--with-pane-layout` overlay flag adds the paired assets to a verified runtime baseline.
