@@ -50,6 +50,7 @@ def test_loaded_search_filters_preserve_active_conversation_and_draft():
     try:
         with Browser(width=1200, height=900) as b:
             b.goto(srv.url()); b.wait("document.querySelectorAll('.xc-sess').length===3 && !!document.querySelector('[aria-current=true]')")
+            b.settle()   # the stream's first catch-up reads the snapshot again: that read is not the filter's
             assert b.eval("document.querySelector('.xc-sess[aria-current=true]').textContent.includes('Ship <img')")
             assert not b.eval("!!document.querySelector('.xc-sessions img')")
             put(b, '.xc-composer .xc-input', 'keep this draft', 2, 7)
