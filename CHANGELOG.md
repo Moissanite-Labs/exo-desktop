@@ -8,6 +8,9 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 - Added a gate PR preflight job that runs plugin acceptance and the base comparator, retaining its differential artifact (#423). Hosted execution and required-check configuration remain pending.
 
 ### Fixed
+- The root README now has a "Desktop app (macOS alpha)" section that points to `clients/desktop`, so the fork's
+  front door no longer ignores its deliverable. `CONTINUITY.md` records that the fork publishes no wheel and that a
+  wheel built here is deliberately the same `exo` 0.2.0 distribution as canonical Exo. Docs only (#56).
 - The `types` CI job passes on the fork again. Three mypy errors in the fork's GitHub auth code
   (`src/exo/core/github_auth.py`, `src/exo/github_auth_cmd.py`) were not in the baseline: a store lookup with a
   possibly missing key, and a second `subprocess.run` result reusing the bytes-typed name of the first. No
