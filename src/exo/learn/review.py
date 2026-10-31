@@ -126,7 +126,7 @@ def needs_review(events: list[dict], turns: int, every: int) -> str | None:
     for e in events:
         if e["kind"] == "ruling" or (e["kind"] == "verdict" and (e["body"] or {}).get("verdict") in CORRECTION_VERDICTS):
             return "signal"
-    if events and turns >= every:
+    if turns >= every:
         return "turns"
     return None
 
@@ -172,14 +172,14 @@ def _touched(lr: Learner, events: list[dict]) -> str:
     return "\n".join(lines) or "(none)"
 
 
-def _clean(items: Any, labels: Mapping[str, str]) -> list[dict]:
+def _clean(items: Any, labels: Mapping[str, str], require_evidence: bool = True) -> list[dict]:
     out = []
     for it in items if isinstance(items, list) else []:
         if not isinstance(it, dict) or it.get("type") not in PTYPES:
             continue
         ev = [labels[x] for x in (it.get("evidence") or []) if x in labels]
-        if it["type"] != "question" and not ev:
-            continue   # a lesson without evidence is invented
+        if it["type"] != "question" and not ev and require_evidence:
+            continue   # a lesson without evidence is invented (signal reviews)
         if not (it.get("claim") or it.get("question") or it.get("wants")):
             continue
         out.append({**it, "evidence": ev})
@@ -220,14 +220,18 @@ async def review(lr: Learner, session: str | None = None, reason: str = "manual"
     if reviews_today(rt.ledger) >= int(fl["daily_cap"]):
         return {"status": "capped"}
     events = new_signals(lr)
-    if not events:
+    if not events and reason == "manual":
+        # A turn/periodic-triggered review has no new correction signals but should still
+        # reflect on the recent conversation and propose general improvements, so it is not
+        # a silent no-op (issue 3). A manual review with nothing to learn stays nothing_new.
         return {"status": "nothing_new"}
     text, labels = _label_events(events)
     prompt = PROMPT.format(events=text, digest=_digest(lr, session) if session else "(none)",
                            touched=_touched(lr, events), do_not=DO_NOT_CAPTURE)[: int(fl["max_chars"])]
     items: list[dict] | None = None
     try:
-        items = _clean(parse_json(await lr.complete("aux", prompt, SYSTEM)).get("proposals"), labels)
+        items = _clean(parse_json(await lr.complete("aux", prompt, SYSTEM)).get("proposals"), labels,
+                       require_evidence=bool(events))
         if fl.get("critic", True):
             for it in items:
                 if _needs_critic(lr, it):
@@ -245,8 +249,8 @@ async def review(lr: Learner, session: str | None = None, reason: str = "manual"
         else:
             made = [r["id"] for r in propose_typed(rt.store, rt.ledger, items, author=rt.agent) if r["id"]]
             how = "model"
-        rt.ledger.append("note", {"type": "learn_review", "upto": events[-1]["seq"], "session": session,
-                                  "reason": reason, "proposals": made, "reflector": how})
+        rt.ledger.append("note", {"type": "learn_review", "upto": events[-1]["seq"] if events else None,
+                                  "session": session, "reason": reason, "proposals": made, "reflector": how})
     out = {"status": "done", "reflector": how, "proposals": made, "read": len(events)}
     if promote:
         from .promote import apply_policy
