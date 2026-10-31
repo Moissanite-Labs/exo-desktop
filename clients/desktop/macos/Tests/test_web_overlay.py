@@ -7,19 +7,24 @@ import tempfile
 
 root = Path(__file__).resolve().parents[1]
 repo = root.parents[2]
-baseline = 'f9d1e423'  # runtime whose server.py, service.py and static assets the overlay verifies
+baseline = '716dad79'  # runtime whose server.py, service.py and static assets the overlay verifies
 pinned = 'cc38bd3af1cd6769b6f0894d7db1dd92a1060e0d2ac2a9c14f8368254431b823'
-exo_main = '75d72a7f'  # reviewed exo main whose server.py and service.py the overlay also accepts
+exo_main = '0ef042e5'  # reviewed exo main whose server.py and service.py the overlay also accepts
 
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+shallow = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--is-shallow-repository'], capture_output=True, text=True).stdout.strip() == 'true'
 for commit in (baseline, exo_main):
     if subprocess.run(['git', '-C', str(repo), 'cat-file', '-e', commit + '^{commit}'], capture_output=True).returncode:
-        print('SKIP: runtime ' + commit + ' is not in this checkout\'s history')
-        sys.exit(0)
+        if shallow:
+            print('SKIP: runtime ' + commit + ' is not in this shallow checkout\'s history')
+            sys.exit(0)
+        # A full clone must have both pins: a missing one means the pin is stale (for example after a history rewrite).
+        print('FAIL: runtime ' + commit + ' is not in this full checkout\'s history; update the pins in this test, prepare-web-overlay.py and the README')
+        sys.exit(1)
 with tempfile.TemporaryDirectory(prefix='overlay fixture ') as tmp:
     base = Path(tmp)
     runtime = base / 'runtime'
