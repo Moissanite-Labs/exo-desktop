@@ -51,14 +51,14 @@ def build(relay) -> MCPServer:
         return relay.store.inbox(relay.registry.audiences(seat_of(ctx)), since, limit)
 
     @mcp.tool()
-    def read_thread(thread: str) -> list[dict]:
-        """All messages in a thread (the thread id is usually the first message's id)."""
-        return relay.store.thread(thread)
+    def read_thread(ctx: Context, thread: str) -> list[dict]:
+        """Messages in a thread that the caller may see, scoped to the caller's audiences."""
+        return relay.store.thread(thread, audiences=relay.registry.audiences(seat_of(ctx)))
 
     @mcp.tool()
-    def search(query: str, limit: int = 50) -> list[dict]:
-        """Substring search over plaintext bodies, thread ids, and senders. Newest first."""
-        return relay.store.search(query, limit)
+    def search(ctx: Context, query: str, limit: int = 50) -> list[dict]:
+        """Substring search over plaintext bodies, thread ids, and senders, scoped to the caller's audiences."""
+        return relay.store.search(query, limit, audiences=relay.registry.audiences(seat_of(ctx)))
 
     @mcp.tool()
     def head() -> dict:
