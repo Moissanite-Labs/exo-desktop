@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSTextFieldDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, NSTextFieldDelegate, WKScriptMessageHandler {
     private var window: NSWindow?
     private var webView: WKWebView?
     private var findBar: NSView?
@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var statusLabel: NSTextField?
     private var statusSpinner: NSProgressIndicator?
     private var origin: URL?
+    private var headerRects: [NSRect] = []
+    private var dragMonitor: Any?
     private var launcher = ExoWebLauncher()
     private var isAttached: Bool { Bundle.main.object(forInfoDictionaryKey: "ExoAttachedCore") as? Bool == true }
     private var transitioning = false
@@ -25,10 +27,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         NSApp.setActivationPolicy(.regular)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = NSColor(srgbRed: 8 / 255, green: 9 / 255, blue: 10 / 255, alpha: 1)
+        window.appearance = NSAppearance(named: .darkAqua)
         window.center()
         window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Exo"
         window.delegate = self
@@ -37,12 +43,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        configuration.userContentController.add(self, name: "headerGeometry")
+        configuration.userContentController.addUserScript(WKUserScript(source: """
+            (() => {
+                let pending = false;
+                const update = () => {
+                    pending = false;
+                    const nav = document.querySelector('.xc-nav');
+                    if (!nav) return;
+                    // DOM style properties also work with the page's strict CSP.
+                    if (nav.style.paddingLeft !== '84px')
+                        nav.style.setProperty('padding-left', '84px', 'important');
+                    const rect = el => {
+                        const r = el.getBoundingClientRect();
+                        return [r.x, r.y, r.width, r.height];
+                    };
+                    window.webkit.messageHandlers.headerGeometry.postMessage([
+                        rect(nav), ...Array.from(nav.querySelectorAll(
+                            'button,a,input,select,textarea,[role="button"],[contenteditable]'
+                        ), rect)
+                    ]);
+                };
+                const schedule = () => {
+                    if (!pending) { pending = true; requestAnimationFrame(update); }
+                };
+                new MutationObserver(schedule).observe(document.body,
+                    {childList: true, subtree: true, attributes: true});
+                window.addEventListener('resize', schedule);
+                document.addEventListener('scroll', schedule, true);
+                schedule();
+            })();
+            """, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.autoresizingMask = []
+        webView.underPageBackgroundColor = window.backgroundColor
         window.contentView?.addSubview(webView)
         self.webView = webView
+        dragMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self, event.window === self.window, let view = self.webView,
+                  let header = self.headerRects.first else { return event }
+            let local = view.convert(event.locationInWindow, from: nil)
+            let point = NSPoint(x: local.x, y: view.isFlipped ? local.y : view.bounds.height - local.y)
+            guard point.x >= 80, header.contains(point),
+                  !self.headerRects.dropFirst().contains(where: { $0.contains(point) }) else { return event }
+            self.window?.performDrag(with: event)
+            return nil
+        }
 
         let statusBar = NSView(frame: .zero)
         statusBar.autoresizingMask = []
@@ -93,6 +141,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         startServer()
     }
 
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "headerGeometry", message.frameInfo.isMainFrame,
+              let url = message.frameInfo.request.url, let origin,
+              url.scheme == origin.scheme, url.host == origin.host, url.port == origin.port,
+              let rows = message.body as? [[Double]], rows.count < 100,
+              rows.allSatisfy({ $0.count == 4 && $0.allSatisfy(\.isFinite) }) else { return }
+        headerRects = rows.map { NSRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) }
+    }
+
     func windowDidResize(_ notification: Notification) {
         layoutViews()
     }
@@ -106,21 +163,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         var remaining = bounds
         if !findBar.isHidden {
             findBar.frame = NSRect(x: 0, y: bounds.maxY - 36, width: bounds.width, height: 36)
-            let fieldWidth = max(120, min(320, bounds.width - 400))
-            findField.frame = NSRect(x: 8, y: 7, width: fieldWidth, height: 22)
+            let fieldWidth = max(120, min(320, bounds.width - 480))
+            findField.frame = NSRect(x: 84, y: 7, width: fieldWidth, height: 22)
             findPreviousButton.frame = NSRect(x: findField.frame.maxX + 8, y: 5, width: 84, height: 26)
             findNextButton.frame = NSRect(x: findPreviousButton.frame.maxX + 4, y: 5, width: 64, height: 26)
             findDoneButton.frame = NSRect(x: findNextButton.frame.maxX + 4, y: 5, width: 64, height: 26)
             findResultLabel.frame = NSRect(x: findDoneButton.frame.maxX + 8, y: 8, width: 100, height: 20)
             remaining.size.height -= 36
         }
-        statusBar.frame = NSRect(x: 0, y: 0, width: bounds.width, height: 24)
+        let statusHeight: CGFloat = statusBar.isHidden ? 0 : 24
+        statusBar.frame = NSRect(x: 0, y: 0, width: bounds.width, height: statusHeight)
         statusSpinner.frame = NSRect(x: 8, y: 4, width: 16, height: 16)
         statusLabel.frame = NSRect(x: 30, y: 2, width: bounds.width - 38, height: 20)
-        webView.frame = NSRect(x: 0, y: 24, width: bounds.width, height: remaining.height - 24)
+        webView.frame = NSRect(x: 0, y: statusHeight, width: bounds.width, height: remaining.height - statusHeight)
     }
 
     private func setStatus(_ text: String, busy: Bool) {
+        statusBar?.isHidden = hasReachedReady && !busy && !showingFailure
+        layoutViews()
         statusLabel?.stringValue = text
         if busy {
             statusSpinner?.startAnimation(nil)
@@ -132,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private func startServer() {
         guard !terminating, let webView else { return }
         transitioning = true
+        headerRects = []
         hasReachedReady = false
         setStatus("Starting Exo…", busy: true)
         let currentLauncher = launcher
@@ -474,6 +535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard !isAttached else { return }
         guard !terminating, !transitioning, !showingFailure else { return }
         transitioning = true
+        headerRects = []
         let currentLauncher = launcher
         currentLauncher.stopWebServer {
           currentLauncher.stopCore { code in
