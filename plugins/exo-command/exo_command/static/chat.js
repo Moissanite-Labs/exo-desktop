@@ -421,6 +421,12 @@ export function mount(root) {
     home();
     scheduleHome();   // finish initial positioning only if no newer reading, layout or navigation intent won
   }
+  // A recovered snapshot redraws every item of the open conversation. A reader at the newest messages stays there;
+  // one who scrolled away keeps their place, as with new output (keepReading).
+  function redrawLog() {
+    if (!logEl.childElementCount || nearHome(layout, logEl.scrollTop, logEl.scrollHeight, logEl.clientHeight)) { drawLog(); return; }
+    keepReading(() => { logEl.replaceChildren(...ordered(items, layout).map(itemEl)); drawHero(); }, layout === "inverse");
+  }
 
   function itemEl(it) {
     let el;
@@ -579,8 +585,14 @@ export function mount(root) {
 
   // ---------------------------------------------------------------- actions
 
+  // Session lists can answer out of order: one asked before a thread was created must not replace one asked after it.
+  let listAsked = 0, listShown = 0;
   async function refreshSessions() {
-    try { sessions = (await api("GET", "/api/chat/sessions")).sessions; drawSessions(); } catch (e) { fail(e); }
+    const asked = ++listAsked;
+    try {
+      const fresh = (await api("GET", "/api/chat/sessions")).sessions;
+      if (asked > listShown) { listShown = asked; sessions = fresh; drawSessions(); }
+    } catch (e) { fail(e); }
   }
 
   function chooseConversation(id) {
@@ -623,13 +635,13 @@ export function mount(root) {
   }
 
   async function recover() {
-    const id = current, generation = ++snapshotGeneration, cutoff = bus.lastSeq(), had = Object.keys(steers);
+    const id = current, generation = ++snapshotGeneration, cutoff = bus.lastSeq(), had = Object.keys(steers), asked = ++listAsked;
     loading = true;
     try {
       const freshSessions = (await api("GET", "/api/chat/sessions")).sessions || [];
       const d = id ? await api("GET", "/api/chat/sessions/" + encodeURIComponent(id)) : null;
       if (id !== current || generation !== snapshotGeneration) return;
-      sessions = freshSessions;
+      if (asked > listShown) { listShown = asked; sessions = freshSessions; }
       if (d) {
         items = mergeTranscript(fromMessages(d.messages || []), items);
         dropSteers(id, had, d.steers);
@@ -641,7 +653,7 @@ export function mount(root) {
     } catch (e) { fail(e); }
     finally {
       if (id === current && generation === snapshotGeneration) {
-        loading = false; drawSessions(); drawLog(); drawStatus(); drawSide();
+        loading = false; drawSessions(); redrawLog(); drawStatus(); drawSide();
         const buffered = pending; pending = []; buffered.forEach(handle);
         syncApprovals(); loadContext();
       }

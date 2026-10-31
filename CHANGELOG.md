@@ -16,6 +16,18 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
   (`src/exo/core/github_auth.py`, `src/exo/github_auth_cmd.py`) were not in the baseline: a store lookup with a
   possibly missing key, and a second `subprocess.run` result reusing the bytes-typed name of the first. No
   behaviour changes.
+- The web thread list keeps a thread it just showed when an older list request answers late. Leaving Chat while
+  the first message's new thread was being created, then coming back, could leave the sidebar empty ("No
+  conversations yet.") until the next session event, because the page drew whichever list answer arrived last.
+  It now draws an answer only when it was asked after the list on screen. This was the intermittent failure of
+  `test_first_submission_recovery_belongs_to_created_thread_after_remount` (#859).
+- Web chat keeps a reader's place when the event stream catches up. On load and after a reconnect, the page reads the
+  conversation again and redraws it. That redraw moved a reader who had scrolled back to the newest message. It now
+  keeps their place, as new output does, and a reader at the newest message stays there. This was the hosted-CI
+  failure of `test_appending_inside_a_tall_stream_does_not_move_the_prefix_being_read` (ported from exo #987).
+- Tests: the chat browser tests that set a layout reload the page instead of calling `goto()` a second time, resize
+  through the driver, and wait for start-up to finish before they read a position (`test_layout_web.py`,
+  `test_short_status_web.py`, `test_workspace_chat.py`, `test_workspace_shell.py`, as in exo #987).
 - The Providers page says why the model list failed instead of showing only a bare exception name, and
   offers "Try again" only when a retry can help. A core that answers and refuses the caller is no longer
   reported as unreachable, and a failed load keeps the last good list, so the default picker stays usable

@@ -220,9 +220,14 @@ The Providers tab (D-034, demo data) is in `docs/ui/`: `web-providers.png` and `
   the core `rename` built-in, principal only (D-069). Renaming another thread does not select it or change the
   current composer draft. A refused save keeps the title draft and shows the error. The list fetch
   (`GET /api/chat/sessions`) clamps its `limit` query to 0..500, default 100 (D-085).
+  The page asks for the thread list again after each change, and two such requests can answer in either
+  order. Only an answer to a later request replaces the list on screen, so a list asked for before a new
+  thread existed cannot hide that thread once a newer list shows it (#859).
 - **Reading position.** Show latest messages appears when the reader moves away from the newest messages.
   It returns to the newest item in either saved layout. Incoming text preserves the reader's position;
-  readers already at the newest item continue following it. The transcript is keyboard focusable.
+  readers already at the newest item continue following it. So does the redraw each time the event stream catches
+  up, on load and after a reconnect, when the page reads the conversation again. Before, that redraw moved the
+  reader back to the newest item. The transcript is keyboard focusable.
 - **Event stream.** `bus.js` reopens the stream itself from the last seq when the browser gives up (EventSource never
   retries after an HTTP error such as a 403 after a restart or a 502 while the core restarts), ignores a seq it has
   already handled, and the server resumes from the later of `?since=` and `Last-Event-ID`. Before D-045 a drop replayed
