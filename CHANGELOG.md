@@ -8,6 +8,10 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 - Added a gate PR preflight job that runs plugin acceptance and the base comparator, retaining its differential artifact (#423). Hosted execution and required-check configuration remain pending.
 
 ### Fixed
+- Returning to a running web thread restores the working indicators and enables Stop (#36). The page reads the fresh
+  session status instead of the cached thread list, keeps each thread's cached status current from turn events
+  (background threads included), and ignores delayed snapshots from a thread that is no longer selected. A turn
+  event redraws the thread list only when a listed thread's status changes, so keyboard focus stays on the same thread.
 - The `types` CI job passes on the fork again. Three mypy errors in the fork's GitHub auth code
   (`src/exo/core/github_auth.py`, `src/exo/github_auth_cmd.py`) were not in the baseline: a store lookup with a
   possibly missing key, and a second `subprocess.run` result reusing the bytes-typed name of the first. No
