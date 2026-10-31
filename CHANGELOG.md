@@ -28,6 +28,10 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 - Tests: the chat browser tests that set a layout reload the page instead of calling `goto()` a second time, resize
   through the driver, and wait for start-up to finish before they read a position (`test_layout_web.py`,
   `test_short_status_web.py`, `test_workspace_chat.py`, `test_workspace_shell.py`, as in exo #987).
+- Tests: the consolidation regression for repeated corrections no longer depends on the calendar date. It wrote its
+  evidence with the real clock and checked decay at the fixed date 2027-02-15, so it failed on every branch from
+  2026-10-31. It now freezes the event times at two fixed anchors and checks decay 120 days after the last evidence;
+  the learning rule is unchanged (ported from exo #1086).
 - The Providers page says why the model list failed instead of showing only a bare exception name, and
   offers "Try again" only when a retry can help. A core that answers and refuses the caller is no longer
   reported as unreachable, and a failed load keeps the last good list, so the default picker stays usable
