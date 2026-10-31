@@ -6,7 +6,7 @@ import pytest
 
 from exo.core.models import FakeProvider, ModelError, Router, aux
 from exo.core.models.fake import rate_limited, tool_turn
-from exo.core.models.router import SOLE_TTL, Breaker, Route, cooldown_until
+from exo.core.models.router import SOLE_TTL, Breaker, Credential, Route, cooldown_until
 from exo.core.types import Message, Provider, ProviderEvent
 
 from .conftest import Recorder, collect, fixture_bytes
@@ -323,6 +323,38 @@ def test_nonretryable_errors_do_not_count():
     for _ in range(3):
         run(r)
     assert "p:free" not in r.breakers
+
+
+def test_spend_gated_failure_is_recorded_not_swallowed():
+    # A failure inside the spend boundary (admitted_stream) must be appended to
+    # `failed` and recorded, so _route runs its fallback/cooldown logic instead of
+    # treating the refused call as a clean success. Regression for issue 7.
+    primary = FakeProvider(["from p"], name="p")
+    clock = Clock()
+    r = make({"main": ["p:m"]}, clock, p=primary)
+    r.spend = object()  # any truthy value enters the spend branch
+
+    err = ProviderEvent(kind="error", error="Model spend stopped: refused", status=None, retryable=False)
+
+    async def _fake_stream(*a, **k):
+        yield err
+
+    import exo.core.models.router as R
+    orig = R.admitted_stream
+    R.admitted_stream = _fake_stream
+    try:
+        failed: list = []
+        attempts: list = []
+        route = Route(provider="p", model="m")
+        cred = Credential(id="p", key=None, provider=primary)
+        out = collect(r._attempt(route, cred, True, [Message.user("hi")], [], {}, failed, attempts))
+        assert any(e.kind == "error" for e in out)
+        # the failure was recorded, not swallowed as an empty `failed`
+        assert failed and failed[0].kind == "error"
+        # the credential is cooled
+        assert "p" in r.cooldowns
+    finally:
+        R.admitted_stream = orig
 
 
 def test_rate_limits_follow_retry_after_without_opening_breaker():
