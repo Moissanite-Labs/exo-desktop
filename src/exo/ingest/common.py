@@ -123,13 +123,27 @@ def author_conf(text: str) -> str:
 
 def load_export_json(path: str | Path, member_suffixes: tuple[str, ...]):
     """Load JSON from a file, a directory or a zip without extracting anything to disk.
-    Returns (data, member) where member is the path inside a zip or directory, or None."""
+    Returns (data, member) where member is the path inside a zip or directory, or None.
+
+    Untrusted exports can be malformed or pathologically nested (a recursion/DoS bomb);
+    any parse failure is surfaced as a plain ``ValueError`` so the ingest CLI exits
+    cleanly instead of dumping a raw traceback."""
     p = Path(path).expanduser()
+
+    def _load(fh) -> Any:
+        try:
+            return json.load(fh)
+        except (json.JSONDecodeError, RecursionError, UnicodeDecodeError, ValueError) as e:
+            raise ValueError(f'{path}: invalid JSON export ({e})') from e
+
     if p.is_dir():
         for suf in member_suffixes:
             hits = sorted(x for x in p.rglob('*') if x.is_file() and x.as_posix().endswith(suf))
             if hits:
-                return json.loads(hits[0].read_text(encoding='utf-8')), hits[0].relative_to(p).as_posix()
+                try:
+                    return _load(io.StringIO(hits[0].read_text(encoding='utf-8'))), hits[0].relative_to(p).as_posix()
+                except ValueError:
+                    raise
         raise FileNotFoundError(f'no {" or ".join(member_suffixes)} under {p}')
     if zipfile.is_zipfile(p):
         with zipfile.ZipFile(p) as z:
@@ -137,9 +151,12 @@ def load_export_json(path: str | Path, member_suffixes: tuple[str, ...]):
                 names = sorted(n for n in z.namelist() if n.endswith(suf))
                 if names:
                     with z.open(names[0]) as fh:
-                        return json.load(io.TextIOWrapper(fh, encoding='utf-8')), names[0]
+                        return _load(io.TextIOWrapper(fh, encoding='utf-8')), names[0]
         raise FileNotFoundError(f'no {" or ".join(member_suffixes)} in {p}')
-    return json.loads(p.read_text(encoding='utf-8')), None
+    try:
+        return _load(io.StringIO(p.read_text(encoding='utf-8'))), None
+    except ValueError:
+        raise
 
 
 # --- the run ------------------------------------------------------------------
