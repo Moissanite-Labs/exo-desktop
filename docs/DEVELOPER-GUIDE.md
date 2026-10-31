@@ -267,6 +267,9 @@ credentials"), asks the principal every time, so do not copy a plugin there to t
 `${EXO_VENV:-$EXO_HOME/venv}` for private experiments; loose `EXO_PLUGIN_DIRS` while you edit instead.
 A seat can limit the list with `[plugins] enabled`. A failed `register` is rolled back, so a half-loaded plugin
 leaves nothing behind.
+A folder plugin imports as `exo_plugins.<name>`, with each character that is not a letter, digit or `_` made `_`.
+So `a-b` and `a_b` would share one module, and the second would replace the first's code. The second to load is
+refused instead, with an error that names both (exo-desktop #52). Give one of them another name.
 
 What `ctx` offers (`src/exo/core/plugins.py`):
 
@@ -347,7 +350,13 @@ in whichever agent the host built then (#389, #580). A compression move carries 
 listener calls `exo.host_undo.turn(session)` on each turn it sees, and acts on a notice only when its last number is
 `exo.host_undo.latest(session)`, so an old engine left behind by an agent rebuild stays out of it. A host with no
 agent left reports `exo.host_undo.report(session)` itself, which reaches the engines still registered for the
-session (#580).
+session (#580). A host that reports no undo at all, such as Hermes's messaging gateway, is covered when it sends
+its whole transcript as `conversation_messages` and the turn's message as `incoming_message`. The first such turn
+of a session in a new engine drops a pin whose message the transcript no longer holds, when the transcript is the
+one noted last with its tail cut at or before the pin's lead (#537). A host that trims the start of its transcript
+drops nothing that way, unless the rows left read word for word like the session's first rows. One that edits an
+earlier user row keeps the pins after it. A host that keeps its engine across an undo must report it: once that
+engine runs a turn after the undo, no later engine drops the pins.
 
 **Who wrote it (D-040).** Every message dict a hook receives has `author` (`principal`, `agent`, `tool`,
 `peer:<name>`, `bus:<seat>`, `job`, `delegate`, `schedule`, `system`) and user messages have `principal`. Treat
