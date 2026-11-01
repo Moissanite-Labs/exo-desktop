@@ -325,6 +325,12 @@ def arrived(seen, path, count):
 COUNT_REPLIES = ("(() => { window.replies = 0; const json = Response.prototype.json;"
                  " Response.prototype.json = async function () { const d = await json.call(this);"
                  " if (this.url.includes('/api/providers/models')) setTimeout(() => window.replies++); return d; }; })()")
+# The page's model-list reads skip the HTTP cache, for tests that hold one while a newer one starts. Chrome's cache
+# lock makes a second GET for a URL wait for an unanswered first one. Chromium 141 skips that after exo's no-store
+# replies, but newer Chrome (156 on CI) waits even then, so the held read would block the newer one the test waits
+# for. The page is fine with that: the newer read then lands after the held one.
+NO_STORE = ("(() => { const fetch = window.fetch.bind(window); window.fetch = (url, opt) =>"
+            " fetch(url, String(url).includes('/api/providers/models') ? {...opt, cache: 'no-store'} : opt); })()")
 CUSTOM_FORM = "document.querySelector('.xc-custom-form')"
 
 
@@ -432,6 +438,7 @@ def test_a_retry_a_newer_load_supersedes_neither_draws_nor_moves_focus(monkeypat
     try:
         with Browser() as b:
             b.goto(srv.url('providers'))
+            b.eval(NO_STORE)
             b.wait(f"{VALUE} === 'demo:first'")
             models_plan.append(('fails', None))
             b.eval(f"{TEST}.click()")
@@ -776,6 +783,7 @@ def test_a_newer_load_over_a_searched_loading_picker_keeps_the_search(monkeypatc
     try:
         with Browser() as b:
             open_at_a_failed_list(b, s, cached)
+            b.eval(NO_STORE)
             s.models[:] = [('succeeds', retry_gate), ('newest', None)]
             count = s.seen.count(MODELS) + 1
             b.eval(f"{RETRY}.click()")
