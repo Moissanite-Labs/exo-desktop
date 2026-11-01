@@ -6405,7 +6405,7 @@ The aimed 17-action by 88-policy differential has zero lowered pairs and zero cl
 - **Why:** a negative `limit` on `GET /api/chat/sessions` reached SQLite, where a negative LIMIT means unlimited, so one request could return every session. A malformed `Content-Length` on an approval answer raised inside `_approve` and the connection closed with no answer.
 - **Decision:** the session-list limit is clamped to 0..500, default 100. An approval answer whose `Content-Length` is not a number, or is negative, gets a 400 answer naming the bad header.
 - **Docs:** `docs/ui/WEB.md` "Opening the page and the page token" and "What is where".
-- **Amendment 2026-10-30 (sync of exo 49312d41):** exo #863 ported the session-list half of this fix as the D-039
+- **Amendment 2026-10-30 (sync of exo 9c0fd5aa):** exo #863 ported the session-list half of this fix as the D-039
   amendment of 2026-10-28 (exo-desktop #55): a `limit` below 1 gets a 400 and reaches no core command, instead of
   the clamp to 0 above. The fork takes exo's form, so that amendment governs the limit. The `Content-Length` half
   stands as decided here; it is fork-only until exo takes it.
