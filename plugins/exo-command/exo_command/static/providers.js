@@ -42,10 +42,23 @@ export function mount(root) {
   let loadGeneration = 0, modelsGeneration = 0;
   let custom = [], customError = "", editing = null;
   let layout = null, pickerLoading = false;
+  // The model search a retry moved focus to. The person has not used it yet, so it does not hold back a redraw, and
+  // the redraw moves focus to the new search. It is the person's once they type in it, press a key in it or click it,
+  // or once focus leaves it for another part of the page. Back in it by Tab or its label, it then holds the panel.
+  let placedSearch = null;
+  function place(search) {
+    placedSearch = search;
+    const used = () => { if (placedSearch === search) placedSearch = null; };
+    for (const kind of ["keydown", "input", "pointerdown"]) search.addEventListener(kind, used, { once: true });
+    // A switch to another window or tab also blurs it, but the page then has no focus, and focus comes back to the
+    // search unused. Not once: the first blur may be such a switch.
+    search.addEventListener("blur", () => { if (document.hasFocus()) used(); });
+  }
 
   // D-091: a failed model list says which failure it was. A transport failure can be retried; an authority
   // refusal cannot, so it gets no button. A failed retry keeps the last good list, so the picker stays usable.
   // Each read takes a generation; only the newest one may change the list, so a slow read never overwrites a newer one.
+  // Says whether this read was the newest, so its reply was applied.
   async function loadModels() {
     const generation = ++modelsGeneration;
     let next = null, failure = null;
@@ -56,10 +69,11 @@ export function mount(root) {
     } catch (e) {
       failure = { text: e.message || "The model list could not be read.", cls: "other", retryable: true };
     }
-    if (!alive || generation !== modelsGeneration) return;
+    if (!alive || generation !== modelsGeneration) return false;
     modelsLoading = false;
     if (failure) modelsError = failure;
     else { models = next; modelsError = null; }
+    return true;
   }
 
   async function load() {
@@ -91,12 +105,16 @@ export function mount(root) {
   // reply, it goes back to the panel control the person moved to while the retry ran (#1014). Else it goes to
   // Try again when that is drawn again, else to the model search, which the picker draws even with no list. The
   // warning note (as exo's refusal message) and then the workspace stay as fallbacks if neither is drawn.
+  // A load started meanwhile (a Test, a Save) supersedes the retry, and so does a newer read of the list. That load
+  // draws its own reply, so a superseded retry neither draws nor moves focus (D-091, fork amendment of 2026-11-01).
+  // A model search this puts focus on is placed (see place()), so it does not hold back a later load's draw.
   async function retryModels() {
     if (!alive || modelsLoading) return;
+    const generation = loadGeneration;
     modelsLoading = true; modelsError = null;
     draw();
-    await loadModels();
-    if (!alive) return;
+    const newest = await loadModels();
+    if (!alive || !newest || generation !== loadGeneration) return;
     const moved = controlKey(document.activeElement);
     draw();
     if (document.activeElement !== document.body) return;
@@ -105,6 +123,7 @@ export function mount(root) {
     const note = body.querySelector(".xc-prov-def .xc-warn");
     const next = same || again || body.querySelector(".xc-prov-def .xc-model-search") || note || root;
     if (next === note) note.tabIndex = -1;
+    if (next.classList.contains("xc-model-search")) place(next);
     next.focus();
   }
 
@@ -189,7 +208,9 @@ export function mount(root) {
         onclick: () => { editing = { name: "", endpoint: "", protocol: "openai", auth: "key", model: "" }; draw(true); } }, "Add custom provider"));
       return section;
     }
-    const name = h("input", { class: "xc-field", value: editing.name, required: true, disabled: !!editing.existing, "aria-label": "Provider name" });
+    // Read once: a save clears `editing` before the form is replaced, so the form keeps its own entry's kind.
+    const existing = !!editing.existing;
+    const name = h("input", { class: "xc-field", value: editing.name, required: true, disabled: existing, "aria-label": "Provider name" });
     const endpoint = h("input", { class: "xc-field", value: editing.endpoint, type: "url", required: true, "aria-label": "Base URL" });
     const model = h("input", { class: "xc-field", value: editing.model, required: true, "aria-label": "Model ID" });
     const protocol = h("select", { class: "xc-field", "aria-label": "Protocol" },
@@ -206,7 +227,7 @@ export function mount(root) {
     const field = (label, input) => h("label", null, h("span", null, label), input);
     const form = h("form", { class: "xc-custom-form", onsubmit: async (e) => {
       e.preventDefault();
-      const request = { name: name.value, endpoint: endpoint.value, protocol: protocol.value, auth: auth.value, model: model.value, key: key.value, replace: !!editing.existing };
+      const request = { name: name.value, endpoint: endpoint.value, protocol: protocol.value, auth: auth.value, model: model.value, key: key.value, replace: existing };
       key.value = "";
       saveButton.disabled = cancelButton.disabled = true;
       try {
@@ -237,12 +258,19 @@ export function mount(root) {
     return results._default && results._default.text;
   }
 
-  function picker() {
+  // `carry` is the text typed into the search of the loading picker this one replaces. It goes in before a failure
+  // is set, because typing in the search clears the picker's error.
+  function picker(carry = "") {
     const rows = [...((models && models.models) || []), ...((models && models.available) || [])];
     // D-091: with no good list the picker says why it failed; with one it stays usable and is marked as the last good read.
     const failed = !!modelsError && !rows.length;
     const chosen = createModelPicker({ label: "Default model", rows: modelsLoading ? null : rows, selected: picked,
       applyLabel: "Save default", note: "The route the main role calls first.", onApply: saveDefault });
+    if (carry) {
+      const search = chosen.element.querySelector(".xc-model-search");
+      search.value = carry;
+      search.dispatchEvent(new Event("input"));
+    }
     if (failed) chosen.setError(modelsError.text);
     pickerLoading = modelsLoading;
     const res = results._default;
@@ -265,9 +293,16 @@ export function mount(root) {
     const active = document.activeElement;
     const keep = active && active.tagName === "INPUT" && ((active.type === "password" && active.value) || active.classList.contains("xc-model-search")) ? active : null;
     // Never redraw while a key is being typed or a model searched. The layout keeps the custom form, so a key in it
-    // does not stop a redraw. Nor does a search in a picker drawn while loading, so a retry's reply is drawn.
-    const search = keep && keep.classList.contains("xc-model-search") && pickerLoading && !modelsLoading ? keep : null;
-    if (keep && !search && !(active.closest && active.closest(".xc-custom-form"))) return;
+    // does not stop a redraw. Nor does a search in a picker drawn while loading, so a retry's reply is drawn, or a
+    // search the retry placed focus on and the person has not used.
+    const search = keep && keep.classList.contains("xc-model-search") &&
+      ((pickerLoading && !modelsLoading) || keep === placedSearch) ? keep : null;
+    if (keep && !search && !(active.closest && active.closest(".xc-custom-form"))) {
+      // The rest waits, but the custom providers section, which never holds that field, still follows a save, Add,
+      // Edit or Cancel. Left as it was, a form whose save cleared `editing` stayed open with nothing to edit.
+      if (layout && (force || !editing)) layout.custom.replaceChildren(customPanel());
+      return;
+    }
     const ready = rows.filter((r) => r.verified || r.ready).length;
     const def = rows.find((r) => r.default);
     counts.replaceChildren(readout([["Ready", ready + " / " + rows.length, ready ? "ok" : "off"],
@@ -289,11 +324,15 @@ export function mount(root) {
         hint: "Add one to the config or start a local server such as Ollama, then open this tab again." })].filter(Boolean));
     // Keep the actual form node (including focus and password input) during unrelated refreshes.
     if (force || !editing) layout.custom.replaceChildren(customPanel());
-    const pick = picker();
+    // Read before the old search is removed. Chrome fires blur on a focused field it removes, which would make it the
+    // person's.
+    const placed = !!search && search === placedSearch;
+    const pick = picker(search ? search.value : "");
     layout.after.replaceChildren(...(pick ? [pick] : []));
-    // The new picker's search takes the focus and any text of the loading one it replaced.
+    // The new picker's search takes the focus of the search it replaced, and stays placed if that one was.
+    // picker() carried its text.
     const next = search && layout.after.querySelector(".xc-model-search");
-    if (next) { if (search.value) { next.value = search.value; next.dispatchEvent(new Event("input")); } next.focus(); }
+    if (next) { if (placed) place(next); next.focus(); }
   }
 
   draw();

@@ -6606,6 +6606,70 @@ The aimed 17-action by 88-policy differential has zero lowered pairs and zero cl
   - Test: `test_held_retry_keeps_focus_moved_inside_the_panel` in `plugins/exo-command/tests/test_provider_retry_web.py` holds the reply. It moves focus to the second provider's Test button, the model select or "Add custom provider", and releases a failure or a success. On main, five of the six cases fail. The select with a success reply passes on main too, because main already falls back to the select there.
   - #850 rewrites `retryModels()` and is still open. When it is reconciled, the focus block runs only when `generation === loadGeneration`, and the picker's search field takes the select's place in the order. #850 still redraws the provider rows, so the name match applies there as it is.
   - **Docs and user impact:** `docs/ui/WEB.md` (Providers section), `docs/DOCS-MAP.md`, `CHANGELOG.md`. No settings change.
+- **Amendment 2026-11-01 (fork, sync of exo e9ad895d): the picker is reconciled here.** The fork draws the default
+  model with its search picker (`model_picker.js`, fork commit f292e0c7), not with exo's select. The canonical
+  picker change is exo PR #850 (`feat/shared-model-picker`, head 589753f9, owner razi-exo), still open.
+  - When a sync brings #850, its picker replaces the fork's, these rules move into #850's code where it lacks them,
+    and the tests below run against it.
+  - The search field takes the select's place in the focus order of the 2026-10-30 line and the #1014 amendment.
+    The picker stays drawn with an empty list, and after a refusal with no list it shows the refusal in its status
+    line. So focus goes to "Try again" when it is drawn again, else to the search. The refusal message and the
+    workspace are not reached as fallbacks.
+  - The fork does not redraw the panel while the model search has focus, or while a provider key field has focus
+    and holds text. A search in a picker drawn while a retry loads no longer holds back the reply. The new picker
+    takes the search's focus and text. The text goes in before a failure is set, because typing in the search
+    clears the picker's error. Set after it, a failed reply with no list read "No models listed".
+  - A search that the retry moves focus to does not hold back a redraw either, until the person types, presses a
+    key or clicks in it (an input, keydown or pointerdown event). The redraw moves focus to the new search, which
+    is treated the same way. The 2026-10-30 line (#932) and the #1014 amendment (#1092) move focus after a retry,
+    and 771d87b7 never did.
+  - With exo's focus move and the fork's hold on a focused search, a Test or Save clicked while the retry waited
+    and answered after it was not drawn until focus left the search and something redrew the panel. The retry's
+    reply put focus on the search, and that search held back the Test's result and the load after it.
+  - That search also becomes the person's when focus leaves it for another part of the page (a blur while the page
+    has focus). Back in it by Tab or by a press on its label, which send it no keydown or pointerdown, it holds
+    back redraws. A switch to another window blurs it while the page has no focus, and it stays the retry's.
+  - `draw()` reads whether the old search was the retry's before it removes that search, because Chrome fires blur
+    on a focused field it removes.
+  - The custom providers section is redrawn even while that rule holds back the rest: for Add, Edit and Cancel, and
+    whenever no entry is being edited. A save whose reload landed while the search had focus left the form open
+    with its entry cleared, and the next Save threw before it sent anything. The form also reads its entry's kind
+    once, when it is drawn.
+  - Exo e9ad895d has the same fault with a provider key field in place of the search, because its `draw()` also
+    returns early for a key field that holds text. That part is a carry of shared code. Its canonical home is exo
+    issue #1099, which has no exo PR or owner yet, and the sync that brings exo's fix replaces the fork's.
+  - The generation guard the #1014 amendment asks for: `retryModels()` notes `loadGeneration` when it starts. It
+    draws and moves focus only if no load started since and its own read of the list was the newest
+    (`loadModels()` says whether it was).
+  - The fork keeps a separate counter for the list, so unlike #850 the retry does not take a new `loadGeneration`,
+    and a load that was already running still applies its rows. A superseded retry leaves the drawing to the newer
+    load, and focus stays where that load leaves it.
+  - Tests in `plugins/exo-command/tests/test_provider_retry_web.py`:
+    `test_held_retry_reply_reaches_a_loading_picker_being_searched` (now over a cached list or none, and a reply
+    that succeeds, fails or is refused), `test_custom_provider_save_is_drawn_while_a_field_holds_the_panel`,
+    `test_a_retry_a_newer_load_supersedes_neither_draws_nor_moves_focus`,
+    `test_a_search_the_retry_focused_does_not_hold_back_a_later_load`,
+    `test_a_search_the_retry_focused_holds_the_panel_once_used`,
+    `test_a_search_the_retry_focused_is_the_persons_once_focus_leaves_it`,
+    `test_a_search_typed_in_while_loading_holds_the_panel_after_the_reply`,
+    `test_custom_form_survives_a_reload_while_another_field_holds_the_panel`,
+    `test_add_and_edit_open_the_custom_form_while_a_field_holds_the_panel`,
+    `test_a_newer_load_over_a_searched_loading_picker_keeps_the_search` and
+    `test_a_key_typed_while_a_retry_waits_stays_in_its_field`.
+  - On 7fabb9a2, 15 of these tests' 30 cases fail. The cases of the once-used, typed-in, survives-a-reload,
+    keeps-the-search and key tests pass there, and so do the Tab and label cases of the focus-leaves test and four
+    of the widened test's six cases.
+  - Each of those fails when the code it guards changes: text typed into a loading search that is not carried
+    over, a search that never becomes the person's, a search that stays the retry's after focus leaves it, a
+    redraw that makes every new search the retry's, a custom section redrawn on every reload, a draw that leaves
+    focus on the page body, or a key field taken for the model search.
+  - The other-window case fails on 7fabb9a2 too. It also fails without the `document.hasFocus()` check, or when
+    `draw()` reads the old search after removing it.
+  - Known limit: a provider key field that has focus and holds text while a retry waits still holds back the
+    reply, so the picker reads "Loading models…" until something else redraws it. 771d87b7 and exo e9ad895d have
+    the same limit. Its canonical home is exo issue #1100, and the fork tracks it as exo-desktop issue #116.
+  - **Docs and user impact:** `docs/ui/WEB.md` (Providers section), `docs/DOCS-MAP.md`, `CHANGELOG.md`. No
+    settings change.
 ## D-092 (2026-10-30) The page's key advice follows the error, not the fact of an error
 - **Status:** Accepted for implementation in this PR. Records after D-091 (#845).
 - **Decision:** the one dim guidance line reads the recorded model error text. An authentication or permission failure ("HTTP 401", "Incorrect API key", "invalid x-api-key", "authentication", "permission denied") may send the reader to the Providers page. A transport failure (`ReadError`, `ReadTimeout`, `ConnectError`, "stream ended without a response", network and unreachable wording) says the model could not be reached and offers no key advice. Text that reads as neither gets a general line pointing at `/trace`. No text at all (an older core, or a boolean flag) gets the general line too.

@@ -15,6 +15,17 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 - Added a gate PR preflight job that runs plugin acceptance and the base comparator, retaining its differential artifact (#423). Hosted execution and required-check configuration remain pending.
 
 ### Fixed
+- The Providers page's default model search no longer hides the answer to "Try again" (fork, D-091 amendment of
+  2026-11-01). A click into the search while the retry loaded kept the picker on "Loading models…" until the panel
+  was redrawn. Now the answer is drawn, and the new picker keeps the search's text and focus, so the text filters
+  the new list. A failed answer with no list says why in the picker's status line.
+- Where the "Try again" entries below name the model select, the fork has the model search (fork, D-091 amendment
+  of 2026-11-01). The refusal message and the workspace never take focus, because the picker stays drawn. The
+  search that "Try again" moves focus to does not hold back a later Test or Save from being drawn, until you type,
+  press a key or click in it, or leave it for another part of the page.
+- A custom provider saved on the Providers page while the model search or a provider key field has focus closes its
+  form and shows its entry, and a "Try again" that a Test or Save overtakes neither draws nor moves focus (fork,
+  D-091 amendment of 2026-11-01).
 - The `types` CI job passes on the fork again. Three mypy errors in the fork's GitHub auth code
   (`src/exo/core/github_auth.py`, `src/exo/github_auth_cmd.py`) were not in the baseline: a store lookup with a
   possibly missing key, and a second `subprocess.run` result reusing the bytes-typed name of the first. No
