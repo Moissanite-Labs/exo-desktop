@@ -18,7 +18,9 @@ def digest(path):
 
 shallow = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--is-shallow-repository'], capture_output=True, text=True).stdout.strip() == 'true'
 for commit in (baseline, exo_main):
-    if subprocess.run(['git', '-C', str(repo), 'cat-file', '-e', commit + '^{commit}'], capture_output=True).returncode:
+    # An object left over from rewritten history is not enough: the pin must be an ancestor of this checkout.
+    if subprocess.run(['git', '-C', str(repo), 'cat-file', '-e', commit + '^{commit}'], capture_output=True).returncode or \
+            subprocess.run(['git', '-C', str(repo), 'merge-base', '--is-ancestor', commit, 'HEAD'], capture_output=True).returncode:
         if shallow:
             print('SKIP: runtime ' + commit + ' is not in this shallow checkout\'s history')
             sys.exit(0)
