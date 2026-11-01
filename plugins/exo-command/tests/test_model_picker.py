@@ -299,7 +299,8 @@ def test_providers_model_list_failure_names_the_class_and_retries_only_a_transpo
 
 
 def test_providers_failed_reread_keeps_the_last_good_list(page):
-    """D-091: a failed read after a good one keeps the list usable and says it is the last good read."""
+    """D-091: a failed read after a good one keeps the list usable and says it is the last good read. A transport
+    failure offers Try again beside that list too (exo bd22b52f)."""
     good = "{models:[{route:'alpha:sonnet',name:'Sonnet'}],available:[{route:'beta:sonnet',name:'Sonnet'}]}"
     mount_providers_with_model_reads(page, '[' + good + ',' + DOWN + ']')
     page.wait('document.querySelectorAll("[role=option]").length === 2')
@@ -308,7 +309,7 @@ def test_providers_failed_reread_keeps_the_last_good_list(page):
     assert page.eval('modelReads') == 2
     assert page.eval('document.querySelector(".xc-prov-def .xc-warn").textContent') == (
         "Exo core is not reachable. This list is from the last good read.")
-    assert page.eval('document.querySelectorAll("[role=option]").length') == 2 and page.eval(TRY_AGAIN) == 0
+    assert page.eval('document.querySelectorAll("[role=option]").length') == 2 and page.eval(TRY_AGAIN) == 1
 
 
 def test_providers_slow_failed_read_cannot_overwrite_a_newer_good_list(page):
