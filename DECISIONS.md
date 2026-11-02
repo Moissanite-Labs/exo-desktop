@@ -6636,8 +6636,9 @@ The aimed 17-action by 88-policy differential has zero lowered pairs and zero cl
     with its entry cleared, and the next Save threw before it sent anything. The form also reads its entry's kind
     once, when it is drawn.
   - Exo e9ad895d has the same fault with a provider key field in place of the search, because its `draw()` also
-    returns early for a key field that holds text. That part is a carry of shared code. Its canonical home is exo
-    issue #1099, which has no exo PR or owner yet, and the sync that brings exo's fix replaces the fork's.
+    returns early for a key field that holds text. That part is a carry of shared code from exo e9ad895d. Its
+    canonical home is exo issue #1099, and its canonical fix is exo PR #1101, by abu-aska. The sync that brings
+    #1101 replaces the fork's fix with exo's.
   - The generation guard the #1014 amendment asks for: `retryModels()` notes `loadGeneration` when it starts. It
     draws and moves focus only if no load started since and its own read of the list was the newest
     (`loadModels()` says whether it was).
@@ -6667,7 +6668,8 @@ The aimed 17-action by 88-policy differential has zero lowered pairs and zero cl
     `draw()` reads the old search after removing it.
   - Known limit: a provider key field that has focus and holds text while a retry waits still holds back the
     reply, so the picker reads "Loading models…" until something else redraws it. 771d87b7 and exo e9ad895d have
-    the same limit. Its canonical home is exo issue #1100, and the fork tracks it as exo-desktop issue #116.
+    the same limit. Its canonical home is exo issue #1100, and the fork tracks it as exo-desktop issue #116. Exo
+    PR #1101 fixes it too, so the sync that brings #1101 drops this limit and closes #116.
   - **Docs and user impact:** `docs/ui/WEB.md` (Providers section), `docs/DOCS-MAP.md`, `CHANGELOG.md`. No
     settings change.
 ## D-092 (2026-10-30) The page's key advice follows the error, not the fact of an error
