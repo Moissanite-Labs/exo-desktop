@@ -49,6 +49,10 @@ cache read, the way Anthropic reports them. The prompt a call sent is tokens in 
 recorded on those routes before D-080 keep the whole prompt in tokens in, and their cost as recorded. A
 route with no price shows `unknown`, never `$0`. A turn with some unpriced calls shows the sum of the priced ones
 with a `+` (`$0.0210+`). A call that used no tokens costs nothing and is not "unknown".
+A call where a route stopped on its provider spend limit (HTTP 402) keeps the figure it did bill, and that figure
+carries the same `+`, because that route did work this turn is not billed for and the sum may be short. `trace` JSON
+says `undercounted_calls` for those calls, and lists `undercounted` on each call. `unpriced_calls` keeps its own
+meaning: a route with no price at all (D-093).
 Add or override a price in config.json under `models.models`, for example
 `{"models": {"models": {"opencode-go:glm-5.3-flash": {"input": 0.3, "output": 1.2}}}}`; a seat can add or
 override prices the same way under `[models.models]`, model by model, and config.json's other prices stay.
@@ -114,7 +118,8 @@ one counted turn, so idle days do not verify anything. The count and days are ke
 ## Commands
 - `exo trace [SESSION] [--last N] [--json]`
 - `exo findings [--status open|fixed|verified|reopened|all] [--json]` lists every state by default, each fixed one with the commit it was fixed in
-- `exo findings fix ID --in SHA`
+- `exo findings fix ID --in SHA`. `ID` is the finding's id or a prefix that only one id starts with. It is plain
+  text: `%` and `_` match only themselves, and an empty id names none (exo-desktop #52).
 - `exo findings export --md` (digest for the developer, grouped by severity, newest first)
 - `exo findings backlog [--limit 20] [--json]` shows unresolved counts by severity and age, plus the oldest rows (0..100). Backlog includes open, reopened and fixed-awaiting-retest; verified findings remain in total state counts but leave the backlog. Age runs from first seen, in elapsed days; malformed historical timestamps have an unknown-age bucket and future timestamps count as zero. The counts and rows come from one database snapshot, read without the write lock, so the read itself neither waits for nor holds up a core that is filing a finding. Opening the store still runs its schema check in a short write transaction, so the command can wait behind a long write before it reads. This read does not update the last-view marker or any lifecycle state.
 - In the TUI: `/trace`, `/findings`; the status line shows the serving route and the open-findings count.
