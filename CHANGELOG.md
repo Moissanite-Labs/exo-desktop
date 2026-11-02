@@ -26,6 +26,10 @@ follow [docs/VERSIONING.md](docs/VERSIONING.md): SemVer, with a codename per MAJ
 - A custom provider saved on the Providers page while the model search or a provider key field has focus closes its
   form and shows its entry, and a "Try again" that a Test or Save overtakes neither draws nor moves focus (fork,
   D-091 amendment of 2026-11-01).
+- The desktop web overlay pins its verified runtime and exo main by their post-cleanup SHAs (`716dad79`,
+  `0ef042e5`) in `prepare-web-overlay.py`, its test and `clients/desktop/README.md`. The old pins no longer
+  existed, so `test_web_overlay.py` skipped silently. It now fails in a full clone when a pin is missing from
+  this checkout's history, and skips only in a shallow one.
 - The `types` CI job passes on the fork again. Three mypy errors in the fork's GitHub auth code
   (`src/exo/core/github_auth.py`, `src/exo/github_auth_cmd.py`) were not in the baseline: a store lookup with a
   possibly missing key, and a second `subprocess.run` result reusing the bytes-typed name of the first. No
