@@ -208,7 +208,7 @@ export function mount(root) {
         onclick: () => { editing = { name: "", endpoint: "", protocol: "openai", auth: "key", model: "" }; draw(true); } }, "Add custom provider"));
       return section;
     }
-    // Read once: a save clears `editing` before the form is replaced, so the form keeps its own entry's kind.
+    // Read once: a save clears `editing` before the form is replaced, so the form keeps its own entry's kind (#1099).
     const existing = !!editing.existing;
     const name = h("input", { class: "xc-field", value: editing.name, required: true, disabled: existing, "aria-label": "Provider name" });
     const endpoint = h("input", { class: "xc-field", value: editing.endpoint, type: "url", required: true, "aria-label": "Base URL" });
@@ -290,23 +290,28 @@ export function mount(root) {
     }
     if (!data) { layout = null; body.replaceChildren(h("div", { class: "xc-loading" }, "Loading providers...")); return; }
     const rows = data.providers || [];
-    const active = document.activeElement;
-    const keep = active && active.tagName === "INPUT" && ((active.type === "password" && active.value) || active.classList.contains("xc-model-search")) ? active : null;
-    // Never redraw while a key is being typed or a model searched. The layout keeps the custom form, so a key in it
-    // does not stop a redraw. Nor does a search in a picker drawn while loading, so a retry's reply is drawn, or a
-    // search the retry placed focus on and the person has not used.
-    const search = keep && keep.classList.contains("xc-model-search") &&
-      ((pickerLoading && !modelsLoading) || keep === placedSearch) ? keep : null;
-    if (keep && !search && !(active.closest && active.closest(".xc-custom-form"))) {
-      // The rest waits, but the custom providers section, which never holds that field, still follows a save, Add,
-      // Edit or Cancel. Left as it was, a form whose save cleared `editing` stayed open with nothing to edit.
-      if (layout && (force || !editing)) layout.custom.replaceChildren(customPanel());
-      return;
-    }
+    // The readout in the page head holds no field, so it is drawn before any hold below: a new default or ready
+    // count shows there while a key is typed or a model searched, as the model section shows it.
     const ready = rows.filter((r) => r.verified || r.ready).length;
     const def = rows.find((r) => r.default);
     counts.replaceChildren(readout([["Ready", ready + " / " + rows.length, ready ? "ok" : "off"],
       ["Default", def ? def.provider : "not set", def ? "on" : "off"]]));
+    const active = document.activeElement;
+    const keep = active && active.tagName === "INPUT" && ((active.type === "password" && active.value) || active.classList.contains("xc-model-search")) ? active : null;
+    // Never redraw a field while a key is being typed or a model searched. The layout keeps the custom form, so a key
+    // in it does not stop a redraw. Nor does a search in a picker drawn while loading, so a retry's reply is drawn, or
+    // a search the retry placed focus on and the person has not used.
+    const search = keep && keep.classList.contains("xc-model-search") &&
+      ((pickerLoading && !modelsLoading) || keep === placedSearch) ? keep : null;
+    if (keep && !search && !(active.closest && active.closest(".xc-custom-form"))) {
+      // A key typed into a provider row holds only the rows. The custom providers section and the model section never
+      // hold that field, so they are still drawn: a saved custom provider's form closes (#1099), and a retry's reply
+      // reaches the model section (#1100). A model search the person is using holds the rows and the model section,
+      // but the custom providers section still follows a save, Add, Edit or Cancel.
+      if (layout && layout.before.contains(keep)) drawSlots(force, null);
+      else if (layout && (force || !editing)) layout.custom.replaceChildren(customPanel());
+      return;
+    }
     if (!layout) {
       layout = { before: h("div", { class: "xc-prov-slot" }), custom: h("div", { class: "xc-prov-slot" }),
         after: h("div", { class: "xc-prov-slot" }) };
@@ -322,6 +327,12 @@ export function mount(root) {
         title: "This core knows no model provider yet.",
         body: "Providers come from the core's router config: hosted APIs that need a key, command-line tools, and local servers.",
         hint: "Add one to the config or start a local server such as Ollama, then open this tab again." })].filter(Boolean));
+    drawSlots(force, search);
+  }
+
+  // The custom providers section and the model section, below the provider rows. `search` is a focused model search
+  // whose text and focus the new picker takes, or null.
+  function drawSlots(force, search) {
     // Keep the actual form node (including focus and password input) during unrelated refreshes.
     if (force || !editing) layout.custom.replaceChildren(customPanel());
     // Read before the old search is removed. Chrome fires blur on a focused field it removes, which would make it the

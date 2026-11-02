@@ -66,6 +66,13 @@ which 1d2f32ac asked for without a binding.
 
 Any other policy error (a YAML error, a bad matrix value, rules or deny that are not lists, an unreadable file)
 still falls back to the defaults alone: `policy error, defaults used: <message>`.
+Malformed flow collections that used to hang, and JSON decoding, index or recursion errors in the YAML reader that
+used to cause an error and ask on every call, now use that same fallback. Reads can therefore be allowed by the
+defaults instead of asking, and configured rules are not applied until the file is corrected. In a principal-started
+turn with permissions bypass, a default ask such as `rm -rf build` can run without a card. With a required executor,
+a former classification exception blocked the call; the fallback can instead allow reads or ask for that `rm` example.
+A YAML integer exceeding Python's conversion limit still raises an error and makes the hook ask on each call,
+or block when an executor is required.
 
 ### A pattern that does not compile refuses the policy (#466)
 
@@ -367,6 +374,27 @@ targets too (#493), so a `target:` rule on it reaches the line as a deny or rese
 reaches the hop's part. A scope on a local path and a standing grant for one stop there: the
 host's reading keeps the exposure the hop gives the line, so `/etc/*` on another host is not read
 private, and no grant for a local write to `/etc/hosts` runs the hop.
+
+Behind a quoted prefix assignment the gate also keeps main's reading, where the quoted word is an
+unknown program (#471). That part outranks a reversible write, a web read or a read with a target of
+its own, so it leads the line, and the hop's command was read on its own target only: under
+`{match: {category: local_write, target: buildhost}, decision: deny}`,
+`X='a b' ssh buildhost 'echo hi > /tmp/f'` asked as code the gate cannot see, and a reserved
+`{category: local_write, target: buildhost}` entry lost its hit, where `X=ab` denied and listed it.
+Each part read behind the quoted word now has a copy on each of its other targets among its parts
+(#852), also a part a value read later adds (`X='a b' declare -n r="x[\$(ssh buildhost ..)]"; echo
+$r`), so a deny entry, a reserved entry or a rule that denies that category on the host meets the
+copy as it meets any part (D-075, #191), and the unknown program stays beside it. The copy's
+summary names the host it lands on, so a reason that names the copy names the host too. A
+rule that only asks reaches a part only when that part leads. So with `opaque_exec` allowed by a
+category line or a rule, an `ask` rule on the category and the host, or on the host alone, still
+lets that line through where `X=ab` asks, as for any part the unknown program outranks
+(`X='a b' echo hi > /tmp/f` under `{category: local_write}: ask`), and as main does (#884).
+A hop whose part does not lead its own command still keeps the host among that part's other
+targets only, as on main: a `$( )` in an argument (`X='a b' echo "$(ssh buildhost 'echo hi >
+/tmp/f')"`, `X='a b' read -t "$(ssh buildhost ..)"`), whose part is read with the line rather than
+behind the quoted word, and a hop after a part that outranks it (`rm -rf /srv/x; ssh buildhost
+'echo hi > /tmp/f'`) ask under that deny entry, where `X=ab` and the plain ssh line deny.
 
 A line with other targets binds its approval to the exact command, as an outward act does. Its
 rule key is the text hash, so a "session" answer covers that line only. A standing grant on one of
@@ -1252,7 +1280,8 @@ too: a store write part only that reading has keeps the answer with the principa
 and a sudo write it reads keeps its displaced part's approvers (#454). The store scan of the
 simple command keeps each store path either reading meets (#514), the quoted word's first, and
 the command behind the word gets each reading the gate makes of a command (an ssh host for an
-empty target, #493). A store name split by quotes, a backslash or a backslash-newline, or written
+empty target, #493, and a copy on the host for a part with a target of its own, #852, "Where a gh
+command lands"). A store name split by quotes, a backslash or a backslash-newline, or written
 in another letter case (#601), is a store write behind a quoted prefix on every reading, and so is
 a write by a relative name after a `cd` there into such a folder (`X='a b' cd ~/.E''XO && cp
 /tmp/x config.json`), which the line read as before reads as a store read. An "always" binds to
@@ -1346,6 +1375,51 @@ gate does not read:
   `uv run`) it classifies the inner text too, within a bounded inspection depth (four levels,
   see "Known limits"). The result is the most severe part, and it keeps the `indirection`
   signal, so `decide` asks even when the inner part alone would only log.
+- A pipe from `printf` or `echo -e` into a shell is read as written, as before, and also as the
+  command writes it (#1047). Bash's printf expands the escapes of its format (`\n`, `\x0a`, `\012`)
+  and fills `%s`, `%b` and `%%` from its arguments, using the format again while they last.
+  `echo -e` (also `-ne` or `-en`) expands its escapes. A `\c` ends the output of `echo -e` and of a
+  `%b` argument.
+
+  So `printf 'cp /tmp/x ~/.exo/config.json\n' | bash` and the same line piped to `sudo -s` are a
+  store write, as the line without `\n` is, and `printf 'r\x6d -rf /srv/data' | bash` is a delete.
+  Before, both were only `opaque_exec`. `deny: [store_write]` and `deny: [delete]` asked for them,
+  and a policy that allows `opaque_exec` let them run.
+
+  The gate reads what the command writes in a second reading of the call, with budgets and memos
+  of its own (`_printed_reading`), as it reads a compound behind `time` (#853). The reading as
+  before reads the text as written only, as it did before #1047, and `decide` keeps the strictest
+  of the two. The call leads with the reading a line of both would lead with: credentials, then a
+  store write, then the more severe.
+
+  The readings that open a compound behind `time` (#853) or behind a `coproc` after `!`, `then`
+  or `{` (#864) each read what the command writes in a printed reading of their own too. So
+  `printf '\x21 coproc for i in 1 2; do cp /tmp/evil gates.yaml; cd ~/.exo/policies; done' | bash`
+  is read as the same line with `!`, and `deny: [store_write]` denies it.
+
+  So the output spends no budget of the reading as before. A later command on the line is read in
+  full there, also past 16 printed readings of a sudo word that may take a value or 24 printed
+  parts that only bash's reading opens. The posts in the output take no room from the violations
+  the reading as before lists.
+
+  And `printf '%b' 'echo hi\c; rm -rf /srv/data' | bash` is still a delete, though bash writes only
+  `echo hi`.
+
+  Only a shell that runs its stdin reads what the command writes: `bash` or `sh` with no script,
+  the shell `sudo -s` starts and `ssh host` with no command. An interpreter and a SQL client read
+  the text as written only, a known limit: `printf 'import os\nos.remove("x")\n' | python3` is
+  still `opaque_exec`. A gh body with an escape stays unseen (#208).
+
+  The gate reads what the command writes only where it is sure of it. Every word must be literal:
+  no expansion, glob, brace, leading `~` or `$".."`. printf may take `--` but no other option, and
+  no conversion but `%s`, `%b` and `%%`. Output past four times the text and 4 KB is not read.
+
+  A `\u` past ASCII stays as written. Bash writes the character there, or an escape of its own
+  spelling (`\u00E9` for `\u00e9`), as its locale allows. A NUL is dropped, as the shell drops it.
+
+  `echo` without `-e` writes its words as they are in bash, so its text is read as written only.
+  dash and zsh expand the escapes of a plain `echo`. A line one of them runs is still read as bash
+  runs it, a known limit.
 - The simple commands a line was built from stay on the result (`parts`), and `decide` checks the
   `reserved` and `deny` lists against every one of them, nested ones included (D-075). So
   `git push origin main && rm -rf build` is denied when `vcs_push` is in `deny`, although the
@@ -3169,9 +3243,9 @@ A stdin the gate cannot read (a file, a variable, a pipe from another command, t
 `sudo -s < /tmp/script.sh`, `cat /tmp/script.sh | sudo -s`, `sudo -s <<< "$CMD"` and
 `env -S 'sudo -s' <<< 'cp /tmp/x ~/.exo/config.json'` are `opaque_exec`: `deny: [store_write]`
 asks for them rather than denying them, and a policy that allows `opaque_exec` lets them run.
-The gate takes the text of a `printf` or `echo -e` as written and does not expand an escape such
-as `\n`. So `printf 'cp /tmp/x ~/.exo/config.json\n' | sudo -s` is `opaque_exec` too, not a store
-write.
+Since #1047 the gate also reads what a `printf` or `echo -e` writes there, with its escapes
+expanded. So `printf 'cp /tmp/x ~/.exo/config.json\n' | sudo -s` is a store write too, and
+`deny: [store_write]` denies it.
 A copy or archive of `keys/` that the gate reads only as a key read has no store write part, so a
 seat that `approvals.yaml` delegates `credentials` to may still answer it, as before #447. It asks
 every time, and no grant covers it: `tar czf /tmp/k.tgz -C ~/.exo keys`,
