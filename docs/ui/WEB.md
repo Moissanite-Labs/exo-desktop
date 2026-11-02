@@ -393,13 +393,19 @@ or "Add custom provider", is on that control again once the reply is drawn (#101
 is not redrawn, so focus in it stays put. Focus moved out of the Providers panel while the retry ran stays where
 it is.
 
-The panel is not redrawn while the model search has focus, or while a provider's key field has focus and holds
-text. A search in a picker drawn while a retry loads does not hold back the reply. The new picker's search takes
-the focus and the typed text, which filters the new list. A failed reply with no list shows its sentence in the
-status line until the search is typed in again.
+While a key typed into a provider's field is waiting there (the field has focus and holds text), the provider
+rows are not redrawn, so the key and its field stay as they are. The rest of the page is still drawn. The readout at
+the top shows a new default or ready count. Below the rows, a retry's reply shows the list or a new "Try again", and
+a saved custom provider's form closes and shows the entry (#1099, #1100). Add custom provider, Edit and Cancel work
+as at any other time.
 
-The custom providers section is still redrawn for Add, Edit and Cancel, and whenever no entry is being edited, so
-a custom provider saved meanwhile closes its form and shows its entry.
+The model search holds back more while it has focus: the provider rows and the model section are not redrawn. The
+readout at the top is still drawn. A search in a picker drawn while a retry loads does not hold back the reply. The
+new picker's search takes the focus and the typed text, which filters the new list. A failed reply with no list
+shows its sentence in the status line until the search is typed in again.
+
+The custom providers section is still redrawn for Add, Edit and Cancel while the model search has focus, and
+whenever no entry is being edited, so a custom provider saved meanwhile closes its form and shows its entry.
 
 A Test or a Save starts a newer load of the panel once its own request is answered, and that load draws its
 reply. A retry's reply draws nothing and leaves focus where it is if, by the time it comes, a load has started

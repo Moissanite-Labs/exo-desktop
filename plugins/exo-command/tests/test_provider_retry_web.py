@@ -335,66 +335,39 @@ CUSTOM_FORM = "document.querySelector('.xc-custom-form')"
 
 
 @pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
-@pytest.mark.parametrize('focus', ['model-search', 'key'])
-def test_custom_provider_save_is_drawn_while_a_field_holds_the_panel(monkeypatch, focus):
-    """Fork: the panel is not redrawn while the model search has focus or a provider key is being typed. A custom
+def test_custom_provider_save_is_drawn_while_a_field_holds_the_panel(monkeypatch):
+    """Fork: the provider rows and the model section are not redrawn while the model search has focus. A custom
     provider saved meanwhile still closes its form and shows the saved entry when the reload after the save lands,
     because the custom providers section is redrawn on its own. The form used to stay open after its entry was
-    cleared, and the next Save threw before it sent anything."""
-    reads, posts, saved = [], [], []
-    hold, release = threading.Event(), threading.Event()
-
-    async def handle(centre, method, path, body, router_factory=None):
-        if path == '/api/providers':
-            return 200, TWO_ROWS
-        if path == '/api/providers/custom':
-            if method == 'POST':
-                posts.append(body)
-                saved[:] = [{k: body[k] for k in ('name', 'endpoint', 'protocol', 'auth', 'model')}]
-                return 200, {'provider': 'custom-' + body['name'], 'ok': True}
-            return 200, {'providers': list(saved)}
-        if path == '/api/providers/models':
-            reads.append(path)
-            if hold.is_set():   # hold the reload after the save until the test has moved focus
-                await opened(release)
-            return 200, MODEL_REPLIES['list']
-        return 200, {'ok': True}
-
-    monkeypatch.setattr(providers, 'handle', handle)
-    srv = Served(ThreadSrc(pairs=0))
+    cleared, and the next Save threw before it sent anything. A key typed into a provider row is exo's case
+    (test_a_custom_provider_saved_while_a_key_is_typed_closes_its_form)."""
+    s = Planned(monkeypatch, TWO_ROWS)
+    gate = threading.Event()
     try:
         with Browser() as b:
-            b.goto(srv.url('providers'))
+            b.goto(s.srv.url('providers'))
             b.wait(f"{VALUE} === 'demo:first'")
-            b.eval("window.rejections = []; addEventListener('unhandledrejection', e => rejections.push(String(e.reason)))")
-            b.eval(f"{ADD_CUSTOM}.click()")
-            b.type('[aria-label="Provider name"]', 'demo')
-            b.type('[aria-label="Base URL"]', 'https://example.test/v1')
-            b.type('[aria-label="Model ID"]', 'model-one')
+            b.eval(REJECTIONS)
+            fill_custom_form(b)
             b.eval(COUNT_REPLIES)
-            hold.set()
-            before = len(reads)
+            s.models.append(('list', gate))   # hold the reload after the save until the test has moved focus
+            count = s.seen.count(MODELS) + 1
             b.eval(f"{CUSTOM_FORM}.requestSubmit()")
-            arrived(reads, '/api/providers/models', before + 1)
-            assert len(posts) == 1
-            if focus == 'model-search':
-                b.eval(f"{SELECT}.focus()")
-            else:
-                b.type('[aria-label="API key for spare"]', 'synthetic-not-a-key')
+            arrived(s.seen, MODELS, count)
+            assert len(s.posts) == 1
+            b.eval(f"{SELECT}.focus()")
             b.eval("window.kept = document.activeElement")
-            release.set()
+            gate.set()
             b.wait("window.replies === 1")
             assert b.eval(f"!!{CUSTOM_FORM}") is False
             assert b.eval("document.body.textContent.includes('Saved custom-demo. Restart the core to use these settings.')")
-            assert b.eval("[...document.querySelectorAll('button')].some(b => b.textContent === 'Edit demo')")
+            assert b.eval(f"!!{EDIT_DEMO}") is True
             assert b.eval("document.activeElement === window.kept && window.kept.isConnected") is True
-            if focus == 'key':
-                assert b.eval("window.kept.value") == 'synthetic-not-a-key'
             assert b.eval("window.rejections") == []
-            assert len(posts) == 1
+            assert len(s.posts) == 1
     finally:
-        release.set()
-        srv.close()
+        gate.set()
+        s.srv.close()
 
 
 NEWEST = {'models': [{'route': 'demo:first'}], 'available': [{'route': 'demo:newest'}]}
@@ -476,25 +449,35 @@ KEY_FIELD = '[aria-label="API key for spare"]'
 CUSTOM_KEY = '[aria-label="Custom provider API key"]'
 NAME_FIELD = "document.querySelector('.xc-custom-form [aria-label=\"Provider name\"]')"
 CANCEL = "[...document.querySelectorAll('.xc-custom-form button')].find(b => b.textContent === 'Cancel')"
+EDIT_DEMO = "[...document.querySelectorAll('button')].find(b => b.textContent === 'Edit demo')"
 REJECTIONS = "window.rejections = []; addEventListener('unhandledrejection', e => rejections.push(String(e.reason)))"
+# The key field holds focus and its text, and it is the same node, so its row was not redrawn.
+KEY_KEPT = "[window.key.isConnected, document.activeElement === window.key, window.key.value]"
 SAVED = {'name': 'demo', 'endpoint': 'https://example.test/v1', 'protocol': 'openai', 'auth': 'key', 'model': 'model-one'}
+READOUT = "[...document.querySelectorAll('.xc-phead-read .xc-rv')].map(e => e.textContent)"
+# TWO_ROWS after a new default: spare is the default, and demo is no longer ready.
+SPARE_DEFAULT = {'providers': [{'provider': 'demo', 'needs': 'none', 'ready': False},
+                               {'provider': 'spare', 'needs': 'key', 'key': 'found', 'ready': True, 'default': True}],
+                 'ready': True, 'store': 'environment'}
 
 
 class Planned:
-    """Serves the provider routes from plans the test fills in. `models` holds (reply, gate) pairs for the next
-    model-list reads. `providers` and `tests` hold gates for the next provider reads and demo Tests. A gate holds its
-    request until the test opens it, and None does not hold. The Nth Test answers "Test ok in N ms.", so a result is
-    told from an earlier one. A custom provider saved with POST is listed by the next read."""
+    """Serves the provider routes from plans the test fills in. `rows` is the provider list the next read returns.
+    `models` holds (reply, gate) pairs for the next model-list reads. `providers` and `tests` hold gates for the next
+    provider reads and demo Tests. A gate holds its request until the test opens it, and None does not hold. The Nth
+    Test answers "Test ok in N ms.", so a result is told from an earlier one. A custom provider saved with POST is
+    listed by the next read, and `posts` records each save's fields but its key."""
 
     def __init__(self, monkeypatch, rows=PROVIDERS, saved=()):
-        self.seen, self.models, self.providers, self.tests, self.saved = [], [], [], [], list(saved)
+        self.rows, self.seen, self.models, self.providers, self.tests = rows, [], [], [], []
+        self.posts, self.saved = [], list(saved)
         self.tested = 0
 
         async def handle(centre, method, path, body, router_factory=None):
             self.seen.append(path)
             if path == '/api/providers':
                 await opened(self.providers.pop(0) if self.providers else None)
-                return 200, rows
+                return 200, self.rows
             if path == MODELS:
                 reply, gate = self.models.pop(0) if self.models else ('list', None)
                 await opened(gate)
@@ -505,6 +488,8 @@ class Planned:
                 return 200, {'ok': True, 'latency_ms': self.tested}
             if path == '/api/providers/custom':
                 if method == 'POST':
+                    # A copy without the key: the server clears the body once the handler returns.
+                    self.posts.append({k: v for k, v in body.items() if k != 'key'})
                     self.saved[:] = [{k: body[k] for k in ('name', 'endpoint', 'protocol', 'auth', 'model')}]
                     return 200, {'provider': 'custom-' + body['name'], 'ok': True}
                 return 200, {'providers': list(self.saved)}
@@ -512,6 +497,13 @@ class Planned:
 
         monkeypatch.setattr(providers, 'handle', handle)
         self.srv = Served(ThreadSrc(pairs=0))
+
+
+def fill_custom_form(b):
+    b.eval(f"{ADD_CUSTOM}.click()")
+    b.type('[aria-label="Provider name"]', 'demo')
+    b.type('[aria-label="Base URL"]', 'https://example.test/v1')
+    b.type('[aria-label="Model ID"]', 'model-one')
 
 
 def open_at_a_failed_list(b, s, cached):
@@ -713,26 +705,20 @@ def test_a_search_typed_in_while_loading_holds_the_panel_after_the_reply(monkeyp
 
 
 @pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
-@pytest.mark.parametrize('focus', ['key', 'model-search'])
-def test_custom_form_survives_a_reload_while_another_field_holds_the_panel(monkeypatch, focus):
-    """Fork: while a provider key with text or the loaded model search holds the panel, the custom providers section
-    is redrawn only for a save, Add, Edit or Cancel. A Test's reload leaves an open form alone: the same node, the
-    fields filled in and the key typed into it."""
+def test_custom_form_survives_a_reload_while_another_field_holds_the_panel(monkeypatch):
+    """Fork: while the loaded model search holds the panel, the custom providers section is redrawn only for a save,
+    Add, Edit or Cancel. A Test's reload leaves an open form alone: the same node, the fields filled in and the key
+    typed into it. A key typed into a provider row is exo's case
+    (test_an_open_custom_form_survives_a_reload_while_a_key_is_typed)."""
     s = Planned(monkeypatch, TWO_ROWS)
     try:
         with Browser() as b:
             b.goto(s.srv.url('providers'))
             b.wait(f"{VALUE} === 'demo:first'")
             b.eval(COUNT_REPLIES)
-            b.eval(f"{ADD_CUSTOM}.click()")
-            b.type('[aria-label="Provider name"]', 'demo')
-            b.type('[aria-label="Base URL"]', 'https://example.test/v1')
-            b.type('[aria-label="Model ID"]', 'model-one')
+            fill_custom_form(b)
             b.type(CUSTOM_KEY, 'custom-synthetic-value')
-            if focus == 'key':
-                b.type(KEY_FIELD, 'synthetic-not-a-key')
-            else:
-                b.eval(f"{SELECT}.focus()")
+            b.eval(f"{SELECT}.focus()")
             b.eval(f"window.form = {CUSTOM_FORM}; window.kept = document.activeElement; {TEST}.click()")
             b.wait("window.replies === 1")
             assert b.eval(f"{CUSTOM_FORM} === window.form") is True
@@ -744,30 +730,24 @@ def test_custom_form_survives_a_reload_while_another_field_holds_the_panel(monke
 
 
 @pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
-@pytest.mark.parametrize('focus', ['key', 'model-search'])
-def test_add_and_edit_open_the_custom_form_while_a_field_holds_the_panel(monkeypatch, focus):
-    """Fork: Add custom provider, Edit and Cancel redraw the custom providers section even while a provider key with
-    text or the model search holds the rest of the panel. A click that leaves focus where it was (Safari's buttons, a
-    script) still opens and closes the form, and focus stays on that field."""
+def test_add_and_edit_open_the_custom_form_while_a_field_holds_the_panel(monkeypatch):
+    """Fork: Add custom provider, Edit and Cancel redraw the custom providers section even while the model search
+    holds the rest of the panel. A click that leaves focus where it was (Safari's buttons, a script) still opens and
+    closes the form, and focus stays on the search. A key typed into a provider row is exo's case
+    (test_add_edit_and_cancel_work_while_a_key_is_typed)."""
     s = Planned(monkeypatch, TWO_ROWS, saved=[SAVED])
     try:
         with Browser() as b:
             b.goto(s.srv.url('providers'))
-            b.wait(f"{VALUE} === 'demo:first'")
-            if focus == 'key':
-                b.type(KEY_FIELD, 'synthetic-not-a-key')
-            else:
-                b.eval(f"{SELECT}.focus()")
+            b.wait(f"{VALUE} === 'demo:first' && !!{EDIT_DEMO}")
+            b.eval(f"{SELECT}.focus()")
             b.eval("window.kept = document.activeElement")
-            for button, name, disabled in ((ADD_CUSTOM, '', False),
-                                           ("[...document.querySelectorAll('button')].find(b => b.textContent === 'Edit demo')", 'demo', True)):
+            for button, name, disabled in ((ADD_CUSTOM, '', False), (EDIT_DEMO, 'demo', True)):
                 b.eval(f"{button}.click()")
                 assert b.eval(f"[{NAME_FIELD}?.value, {NAME_FIELD}?.disabled]") == [name, disabled]
                 b.eval(f"{CANCEL}.click()")
                 assert b.eval(f"!{CUSTOM_FORM} && !!{ADD_CUSTOM}") is True
                 assert b.eval("document.activeElement === window.kept && window.kept.isConnected") is True
-            if focus == 'key':
-                assert b.eval("window.kept.value") == 'synthetic-not-a-key'
     finally:
         s.srv.close()
 
@@ -807,11 +787,128 @@ def test_a_newer_load_over_a_searched_loading_picker_keeps_the_search(monkeypatc
         s.srv.close()
 
 
+# A key typed into a provider row holds back only the provider rows (#1099, #1100). These tests type into the spare
+# row's key field and check what is still drawn around it. Each holds at most one model-list read at a time, so
+# Chrome's cache lock (a second GET for a URL waits for an unanswered first one) never holds a read the test waits on.
+
+
+@pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
+def test_a_custom_provider_saved_while_a_key_is_typed_closes_its_form(monkeypatch):
+    """A custom provider saved while a key is typed into a provider row closes its form and shows the saved entry
+    when the reload after the save lands. The key's row is not redrawn. The form used to stay open after the save
+    had cleared its entry, and the next Save threw before it sent anything (#1099)."""
+    s = Planned(monkeypatch, TWO_ROWS)
+    gate = threading.Event()
+    try:
+        with Browser() as b:
+            b.goto(s.srv.url('providers'))
+            b.wait(f"{VALUE} === 'demo:first'")
+            b.eval(REJECTIONS)
+            fill_custom_form(b)
+            b.eval(COUNT_REPLIES)
+            s.models.append(('list', gate))
+            count = s.seen.count(MODELS) + 1
+            b.eval(f"{CUSTOM_FORM}.requestSubmit()")
+            arrived(s.seen, MODELS, count)   # the save is answered, and its reload waits on the model list
+            assert len(s.posts) == 1
+            b.type(KEY_FIELD, 'synthetic-not-a-key')
+            b.eval("window.key = document.activeElement")
+            gate.set()
+            b.wait("window.replies === 1")
+            assert b.eval(f"!!{CUSTOM_FORM}") is False
+            assert b.eval("document.body.textContent.includes('Saved custom-demo. Restart the core to use these settings.')")
+            assert b.eval(f"!!{EDIT_DEMO}") is True
+            assert b.eval(KEY_KEPT) == [True, True, 'synthetic-not-a-key']
+            assert b.eval("window.rejections") == []
+            assert len(s.posts) == 1
+    finally:
+        gate.set()
+        s.srv.close()
+
+
+@pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
+def test_add_edit_and_cancel_work_while_a_key_is_typed(monkeypatch):
+    """Add custom provider, Edit and Cancel open and close the custom form while a key is typed into a provider row.
+    A click that leaves focus where it was (Safari's buttons, a script) used to do nothing, because the redraw
+    returned early (#1099). Focus and the key stay in the key field."""
+    s = Planned(monkeypatch, TWO_ROWS, saved=[SAVED])
+    try:
+        with Browser() as b:
+            b.goto(s.srv.url('providers'))
+            b.wait(f"{VALUE} === 'demo:first' && !!{EDIT_DEMO}")
+            b.type(KEY_FIELD, 'synthetic-not-a-key')
+            b.eval("window.key = document.activeElement")
+            for button, name, disabled in ((ADD_CUSTOM, '', False), (EDIT_DEMO, 'demo', True)):
+                b.eval(f"{button}.click()")
+                assert b.eval(f"[{NAME_FIELD}?.value, {NAME_FIELD}?.disabled]") == [name, disabled]
+                b.eval(f"{CANCEL}.click()")
+                assert b.eval(f"!{CUSTOM_FORM} && !!{ADD_CUSTOM}") is True
+                assert b.eval(KEY_KEPT) == [True, True, 'synthetic-not-a-key']
+    finally:
+        s.srv.close()
+
+
+@pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
+def test_an_open_custom_form_survives_a_reload_while_a_key_is_typed(monkeypatch):
+    """A Test's reload while a key is typed into a provider row leaves an open custom form alone: the same node, its
+    fields filled in and the key typed into it. Only a save, Add, Edit or Cancel redraws that section."""
+    s = Planned(monkeypatch, TWO_ROWS)
+    try:
+        with Browser() as b:
+            b.goto(s.srv.url('providers'))
+            b.wait(f"{VALUE} === 'demo:first'")
+            fill_custom_form(b)
+            b.type(CUSTOM_KEY, 'custom-synthetic-value')
+            b.type(KEY_FIELD, 'synthetic-not-a-key')
+            b.eval(COUNT_REPLIES)
+            b.eval(f"window.form = {CUSTOM_FORM}; window.key = document.activeElement; {TEST}.click()")
+            b.wait("window.replies === 1")
+            assert b.eval(f"{CUSTOM_FORM} === window.form") is True
+            assert b.eval("[...window.form.querySelectorAll('input')].map(e => e.value)") == [
+                'demo', 'https://example.test/v1', 'model-one', 'custom-synthetic-value']
+            assert b.eval(KEY_KEPT) == [True, True, 'synthetic-not-a-key']
+    finally:
+        s.srv.close()
+
+
+@pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
+@pytest.mark.parametrize('outcome', ['fails', 'succeeds'])
+@pytest.mark.parametrize('cached', [False, True], ids=['no-list', 'cached-list'])
+def test_a_retry_reply_is_drawn_while_a_key_is_typed(monkeypatch, cached, outcome):
+    """A key typed into a provider row while Try again waits does not hold back the reply: the model section draws
+    it, a new Try again or the new list. The key's row is not redrawn, and the key field keeps focus and its text.
+    The model section used to stay as the retry left it: the fork's picker read "Loading models…" (#1100,
+    exo-desktop #116)."""
+    s = Planned(monkeypatch, TWO_ROWS)
+    gate = threading.Event()
+    try:
+        with Browser() as b:
+            open_at_a_failed_list(b, s, cached)
+            s.models.append((outcome, gate))
+            count = s.seen.count(MODELS) + 1
+            b.eval(f"window.oldRetry = {RETRY}; window.oldRetry.click()")
+            arrived(s.seen, MODELS, count)
+            assert b.eval(STATUS) == 'Loading models…'
+            b.type(KEY_FIELD, 'synthetic-not-a-key')
+            b.eval("window.key = document.activeElement")
+            gate.set()
+            b.wait("window.replies === 1")
+            assert b.eval(DRAWN[outcome]) is True
+            assert b.eval(STATUS) != 'Loading models…'
+            if outcome == 'succeeds':
+                assert b.eval(VALUE) == 'demo:first'
+            assert b.eval(KEY_KEPT) == [True, True, 'synthetic-not-a-key']
+            assert b.eval("window.rejections") == []
+    finally:
+        gate.set()
+        s.srv.close()
+
+
 @pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
 def test_a_key_typed_while_a_retry_waits_stays_in_its_field(monkeypatch):
     """A provider key typed while a retry waits stays in its field when the reply comes, and the field keeps focus.
-    Only a model search hands its text and focus to the new picker, so none of the key reaches the search. The reply
-    itself is still held back while the key field has focus and holds text (exo #1100)."""
+    The reply is drawn around it: the new list, with its first route chosen (exo #1100, exo-desktop #116). Only a
+    model search hands its text and focus to the new picker, so none of the key reaches the new search."""
     s = Planned(monkeypatch, TWO_ROWS)
     retry_gate = threading.Event()
     try:
@@ -821,14 +918,95 @@ def test_a_key_typed_while_a_retry_waits_stays_in_its_field(monkeypatch):
             count = s.seen.count(MODELS) + 1
             b.eval(f"{RETRY}.click()")
             arrived(s.seen, MODELS, count)
+            b.eval(f"window.loading = {SELECT}")
             b.type(KEY_FIELD, 'synthetic-not-a-key')
             b.eval("window.key = document.activeElement")
             retry_gate.set()
             b.wait("window.replies === 1")
-            assert b.eval("[window.key.isConnected, document.activeElement === window.key, window.key.value]") == [
-                True, True, 'synthetic-not-a-key']
+            assert b.eval(KEY_KEPT) == [True, True, 'synthetic-not-a-key']
+            assert b.eval("window.loading.isConnected") is False   # the reply replaced the loading picker
+            assert b.eval(OPTIONS) == ['demo:first', 'demo:recovered']
+            assert b.eval(VALUE) == 'demo:first'
             assert b.eval(f"{SELECT}.value") == ''
             assert b.eval("window.rejections") == []
     finally:
         retry_gate.set()
+        s.srv.close()
+
+
+@pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
+def test_the_page_head_readout_is_drawn_while_a_key_is_typed(monkeypatch):
+    """A reload while a key is typed into a provider row still draws the readout in the page head, so a new default
+    and ready count show there at once. Only the provider rows wait: the key's row is not redrawn, and the key field
+    keeps focus and its text. The readout used to wait with the rows."""
+    s = Planned(monkeypatch, TWO_ROWS)
+    try:
+        with Browser() as b:
+            b.goto(s.srv.url('providers'))
+            b.wait(f"{VALUE} === 'demo:first'")
+            assert b.eval(READOUT) == ['2 / 2', 'not set']
+            b.type(KEY_FIELD, 'synthetic-not-a-key')
+            b.eval("window.key = document.activeElement")
+            b.eval(COUNT_REPLIES)
+            s.rows = SPARE_DEFAULT
+            b.eval(f"{TEST}.click()")
+            b.wait("window.replies === 1")
+            assert b.eval(READOUT) == ['1 / 2', 'spare']
+            assert b.eval(KEY_KEPT) == [True, True, 'synthetic-not-a-key']
+    finally:
+        s.srv.close()
+
+
+@pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
+def test_the_page_head_readout_is_drawn_while_a_model_search_holds_the_panel(monkeypatch):
+    """Fork: a model search the person is using holds back the provider rows and the model section, but not the
+    readout in the page head, which is drawn before that hold too. A Test's reload that makes spare the default and
+    demo not ready shows there at once. The search keeps its node, its focus and its text, and the rows wait."""
+    s = Planned(monkeypatch, TWO_ROWS)
+    try:
+        with Browser() as b:
+            b.goto(s.srv.url('providers'))
+            b.wait(f"{VALUE} === 'demo:first'")
+            assert b.eval(READOUT) == ['2 / 2', 'not set']
+            b.type('.xc-prov-def .xc-model-search', 'demo')
+            b.eval(f"window.search = {SELECT}")
+            b.eval(COUNT_REPLIES)
+            s.rows = SPARE_DEFAULT
+            b.eval(f"{TEST}.click()")
+            b.wait("window.replies === 1")
+            assert b.eval(READOUT) == ['1 / 2', 'spare']
+            assert b.eval("[window.search.isConnected, document.activeElement === window.search, window.search.value]") == [
+                True, True, 'demo']
+            assert b.eval("!!document.querySelector('.xc-defmark')") is False   # the rows still show the old default
+    finally:
+        s.srv.close()
+
+
+@pytest.mark.skipif(not find_chrome() or not importlib.util.find_spec('websockets'), reason='Chrome/websockets missing')
+def test_a_late_submit_of_a_saved_entry_sends_and_throws_nothing(monkeypatch):
+    """The custom form reads whether its entry exists once, when it is built. A submit that reaches an edited entry's
+    form after its save cleared `editing`, while the save's reload waits, sends the save again as a replace and
+    throws nothing. Only a script can do this, since Save is disabled while the save runs. The submit used to throw
+    on `editing.existing` before it sent anything (#1099)."""
+    s = Planned(monkeypatch, TWO_ROWS, saved=[SAVED])
+    gate = threading.Event()
+    try:
+        with Browser() as b:
+            b.goto(s.srv.url('providers'))
+            b.wait(f"{VALUE} === 'demo:first' && !!{EDIT_DEMO}")
+            b.eval(REJECTIONS)
+            b.eval(f"{EDIT_DEMO}.click()")
+            s.models.append(('list', gate))
+            count = s.seen.count(MODELS) + 1
+            b.eval(f"window.form = {CUSTOM_FORM}; window.form.requestSubmit()")
+            arrived(s.seen, MODELS, count)   # the save is answered and has cleared its entry, and its reload waits
+            assert [p['replace'] for p in s.posts] == [True]
+            b.eval("window.form.requestSubmit()")
+            end = time.monotonic() + 10
+            while len(s.posts) < 2 and time.monotonic() < end:
+                time.sleep(0.02)
+            assert [p['replace'] for p in s.posts] == [True, True]
+            assert b.eval("window.rejections") == []
+    finally:
+        gate.set()
         s.srv.close()
