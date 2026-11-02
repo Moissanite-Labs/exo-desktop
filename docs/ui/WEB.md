@@ -369,7 +369,8 @@ The Providers tab (`providers.js`) shows where keys are stored, one row per prov
 installed), the source of the key (never a value), the model count and a default mark. A provider that needs a
 key has a password field with Save, Test and Remove. After Save the field is cleared at once, also on error;
 the key is read once to build the request body and is never logged, shown again, put in a URL or kept in
-browser storage. A select lists the configured routes, then the available ones, with Save default. The routes
+browser storage. The default model is chosen with a search field over the configured routes, then the available
+ones. Typing filters the list and saves nothing. Enter, a click on a route or Save default saves the chosen one. The routes
 need the page token: `exo web` prints a link with `#token=...`; the page moves it to `sessionStorage` (this
 tab only), removes it from the address bar and sends it as `X-Exo-Token` on every call (D-039; the provider
 routes also need a loopback peer). Without a token the tab only asks you to open that link. When no provider
@@ -381,7 +382,34 @@ refused this page, or one whose own call failed. A core on TCP that refuses this
 file. A core's own failure is shown in its own words, with no exception class name (#856). The reply is still 200 with both lists present, plus
 `error`, `error_class` and `retryable` (D-091). The sentence is redacted and capped at 300 characters, and
 the "Try again" button appears only for the transport class, because a refusal would answer the same way.
-A failed retry keeps the last good list, so the default picker stays usable.
+A failed retry keeps the last good list, so the default picker stays usable. Retryable failures keep the
+"Try again" control beside that cached list. A successful refresh clears the warning. A retry redraws the
+section, so focus then moves to "Try again" when it is offered again, or else to the model search. The picker
+stays drawn with an empty list, and after a refusal with no list it shows the refusal in its status line, so the
+search is always there to take focus.
+
+Focus moved to another Providers control while the retry ran, such as a provider's Test button, the model search
+or "Add custom provider", is on that control again once the reply is drawn (#1014). An open custom provider form
+is not redrawn, so focus in it stays put. Focus moved out of the Providers panel while the retry ran stays where
+it is.
+
+The panel is not redrawn while the model search has focus, or while a provider's key field has focus and holds
+text. A search in a picker drawn while a retry loads does not hold back the reply. The new picker's search takes
+the focus and the typed text, which filters the new list. A failed reply with no list shows its sentence in the
+status line until the search is typed in again.
+
+The custom providers section is still redrawn for Add, Edit and Cancel, and whenever no entry is being edited, so
+a custom provider saved meanwhile closes its form and shows its entry.
+
+A Test or a Save starts a newer load of the panel once its own request is answered, and that load draws its
+reply. A retry's reply draws nothing and leaves focus where it is if, by the time it comes, a load has started
+since the retry did or has asked for the model list since the retry did. Otherwise the retry's reply is drawn first
+and moves focus as above.
+
+A search that the retry moved focus to does not hold back the later load, which is drawn and moves focus to its own
+search. That search holds back redraws once you type, press a key or click in it. Leaving it for another part of the
+page also makes it yours, so it holds back redraws when you come back with Tab or a click on its label. Switching
+to another window and back does not.
 
 A Test that passes also tells the running core to reload that provider (the reply carries `core_reloaded`). A
 provider that was cooling down after a failure then takes the next message at once.
@@ -421,6 +449,11 @@ Tasks, Schedule, Command and Providers follow the site v2 (`site/assets/style.cs
   another section, Refresh or the request closing elsewhere drops the confirm. Allow and deny answer at once.
   At 1280px and up approvals and decisions sit left of live sessions; tasks, projects and cost run full width.
   Empty sections say what will appear and how.
+- **Providers** offers a Google AI Studio Gemini key using Google's OpenAI-compatible endpoint and a custom provider form
+  for OpenAI Chat Completions or Anthropic Messages. Custom endpoint settings apply after the core restarts; keys use the
+  existing secret store. Endpoint changes use a separate key reference. See `docs/PROVIDERS.md` for protocol and URL limits.
+  Add requires a new name; use Edit to replace an existing entry. Other provider actions can show status while the
+  custom form retains its in-progress fields.
 - **Providers** is a rack of ruled rows: name and default mark, the status pill, then key source, env var, model count
   and roles as labelled values, with the key field and buttons under them. The default model has its own panel.
 - **Focus and motion.** Every control keeps the orange focus ring (inset on tabs and gauges). The page head reveals
