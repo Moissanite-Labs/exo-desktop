@@ -6789,9 +6789,10 @@ The aimed 17-action by 88-policy differential has zero lowered pairs and zero cl
     The picker stays drawn with an empty list, and after a refusal with no list it shows the refusal in its status
     line. So focus goes to "Try again" when it is drawn again, else to the search. The refusal message and the
     workspace are not reached as fallbacks.
-  - The fork does not redraw the panel while the model search has focus, or while a provider key field has focus
-    and holds text. A search in a picker drawn while a retry loads no longer holds back the reply. The new picker
-    takes the search's focus and text. The text goes in before a failure is set, because typing in the search
+  - The fork does not redraw the provider rows or the model section while the model search has focus. Until
+    2026-11-02 a provider key field that had focus and held text held them back too (the amendment below).
+  - A search in a picker drawn while a retry loads no longer holds back the reply. The new picker takes the
+    search's focus and text. The text goes in before a failure is set, because typing in the search
     clears the picker's error. Set after it, a failed reply with no list read "No models listed".
   - A search that the retry moves focus to does not hold back a redraw either, until the person types, presses a
     key or clicks in it (an input, keydown or pointerdown event). The redraw moves focus to the new search, which
@@ -6832,15 +6833,18 @@ The aimed 17-action by 88-policy differential has zero lowered pairs and zero cl
     `test_add_and_edit_open_the_custom_form_while_a_field_holds_the_panel`,
     `test_a_newer_load_over_a_searched_loading_picker_keeps_the_search` and
     `test_a_key_typed_while_a_retry_waits_stays_in_its_field`.
-  - On 7fabb9a2, 15 of these tests' 30 cases fail. The cases of the once-used, typed-in, survives-a-reload,
-    keeps-the-search and key tests pass there, and so do the Tab and label cases of the focus-leaves test and four
-    of the widened test's six cases.
+  - On 7fabb9a2, 15 of these tests' 30 cases fail (counted on the test file of f9fd58d4). The cases of the
+    once-used, typed-in, survives-a-reload, keeps-the-search and key tests pass there, and so do the Tab and label
+    cases of the focus-leaves test and four of the widened test's six cases.
   - Each of those fails when the code it guards changes: text typed into a loading search that is not carried
     over, a search that never becomes the person's, a search that stays the retry's after focus leaves it, a
     redraw that makes every new search the retry's, a custom section redrawn on every reload, a draw that leaves
     focus on the page body, or a key field taken for the model search.
   - The other-window case fails on 7fabb9a2 too. It also fails without the `document.hasFocus()` check, or when
     `draw()` reads the old search after removing it.
+  - The 2026-11-02 sync dropped the key cases of the save, Add and Edit, and reload tests, and the key test now
+    asserts that the reply is drawn. With that file the eleven tests have 27 cases, and 14 of them fail on
+    7fabb9a2, the key test among them.
   - Known limit until 2026-11-02: a provider key field that has focus and holds text while a retry waits still
     held back the reply, so the picker read "Loading models…" until something else redrew it. 771d87b7 and exo
     e9ad895d had the same limit. Its canonical home is exo issue #1100, and the fork tracked it as exo-desktop
@@ -6857,7 +6861,9 @@ The aimed 17-action by 88-policy differential has zero lowered pairs and zero cl
   - A model search the person is using still holds back the provider rows and the model section. The custom
     providers section is still redrawn for a save, Add, Edit or Cancel, and whenever no entry is being edited.
   - The readout in the page head is drawn before either hold, so a new default or ready count also shows while
-    the model search holds the panel. Exo draws it before the key field hold only, since exo has no search.
+    the model search holds the panel. Exo draws it before the key field hold only, since exo has no search. This
+    rule and its test are part of the picker carry above (exo PR #850, razi-exo). When a sync brings #850, they
+    move into #850's code where it lacks them.
   - `drawSlots(force, search)` takes the place of exo's `drawSlots(force)`. It carries a focused search's text and
     focus into the new picker, for a search in a loading picker or one the retry placed.
   - The custom form reads `editing.existing` once, when it is built, as in exo.
